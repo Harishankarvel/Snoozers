@@ -1,4 +1,11 @@
+import sys
 import os
+
+# Ensure the backend directory is in the Python path so 'app' can be found
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
@@ -47,3 +54,7 @@ async def health_check():
             "telemetry_ws": "/ws/telemetry"
         }
     }
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run('app.main:app', host='127.0.0.1', port=8000, reload=True)
