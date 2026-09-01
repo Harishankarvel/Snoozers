@@ -7,7 +7,7 @@ import traceback
 async def test_api():
     print("[1/4] Testing HTTP API Endpoints...")
     try:
-        with urllib.request.urlopen("http://localhost:8000/api/health") as response:
+        with urllib.request.urlopen("http://127.0.0.1:8000/api/health") as response:
             data = json.loads(response.read().decode())
             print(f"  [OK] /api/health Response: {data}")
             assert data["status"] == "HEALTHY"
@@ -16,7 +16,7 @@ async def test_api():
         return False
 
     try:
-        with urllib.request.urlopen("http://localhost:8000/") as response:
+        with urllib.request.urlopen("http://127.0.0.1:8000/") as response:
             html = response.read().decode()
             print(f"  [OK] GET / (Dashboard HTML): received {len(html)} bytes")
             assert "AURA-AV" in html
@@ -27,10 +27,10 @@ async def test_api():
 
 async def test_video_ws():
     print("[2/4] Testing /ws/video Binary Stream...")
-    uri = "ws://localhost:8000/ws/video"
+    uri = "ws://127.0.0.1:8000/ws/video"
     try:
         ws = await websockets.connect(uri)
-        print("  [OK] Connected to ws://localhost:8000/ws/video")
+        print("  [OK] Connected to ws://127.0.0.1:8000/ws/video")
         for i in range(5):
             frame_bytes = await asyncio.wait_for(ws.recv(), timeout=3.0)
             is_jpeg = frame_bytes[:2] == b'\xff\xd8'
@@ -47,10 +47,10 @@ async def test_video_ws():
 
 async def test_telemetry_ws():
     print("[3/4] Testing /ws/telemetry Bi-Directional Stream...")
-    uri = "ws://localhost:8000/ws/telemetry"
+    uri = "ws://127.0.0.1:8000/ws/telemetry"
     try:
         ws = await websockets.connect(uri)
-        print("  [OK] Connected to ws://localhost:8000/ws/telemetry")
+        print("  [OK] Connected to ws://127.0.0.1:8000/ws/telemetry")
         
         # 1. Receive initial telemetry packets
         packet_raw = await asyncio.wait_for(ws.recv(), timeout=3.0)

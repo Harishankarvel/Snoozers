@@ -36,6 +36,33 @@ export class MockSimulationEngine {
   // Active Fault Injections
   private activeFaults: Map<string, { startTime: number; durationMs: number; params?: any }> = new Map();
 
+  // Sensor Confidence Evolution State
+  private smoothedConfidence = {
+    camera: 0.98,
+    lidar: 0.96,
+    radar: 0.95,
+    imu: 0.99,
+    gnss: 0.94,
+  };
+  private confidenceHistory: Array<{
+    timestamp: number;
+    camera: number;
+    lidar: number;
+    radar: number;
+    imu: number;
+    gnss: number;
+  }> = [];
+  private eventMarkers: Array<{
+    id: string;
+    timestamp: number;
+    timeLabel: string;
+    event: string;
+    reason: string;
+    severity: 'INFO' | 'CAUTION' | 'WARNING' | 'CRITICAL';
+  }> = [];
+  private eventCounter = 0;
+  private lastFaultKeys: Set<string> = new Set();
+
   // Rain / Fog particles
   private rainDrops: Array<{ x: number; y: number; speed: number; length: number }> = [];
 
@@ -590,13 +617,141 @@ export class MockSimulationEngine {
       }
     });
 
+    // Compute Temporal Sensor Confidence Evolution
+    const now = Date.now();
+    const currentFaults = new Set(this.activeFaults.keys());
+
+    // Register event markers on fault transition
+    currentFaults.forEach((fault) => {
+      if (!this.lastFaultKeys.has(fault)) {
+        this.eventCounter++;
+        this.eventMarkers.push({
+          id: `mock-evt-${this.eventCounter}`,
+          timestamp: now,
+          timeLabel: new Date().toISOString().split('T')[1].slice(0, 10),
+          event: `${fault.toUpperCase().replace(/_/g, ' ')} STARTED`,
+          reason: `Fault condition '${fault}' active in mock simulation`,
+          severity: fault.includes('failure') || fault.includes('override') ? 'WARNING' : 'CAUTION',
+        });
+        if (this.eventMarkers.length > 20) this.eventMarkers.shift();
+      }
+    });
+
+    this.lastFaultKeys.forEach((fault) => {
+      if (!currentFaults.has(fault)) {
+        this.eventCounter++;
+        this.eventMarkers.push({
+          id: `mock-evt-${this.eventCounter}`,
+          timestamp: now,
+          timeLabel: new Date().toISOString().split('T')[1].slice(0, 10),
+          event: `${fault.toUpperCase().replace(/_/g, ' ')} RESOLVED`,
+          reason: `Condition '${fault}' cleared, sensors recovering`,
+          severity: 'INFO',
+        });
+        if (this.eventMarkers.length > 20) this.eventMarkers.shift();
+      }
+    });
+
+    this.lastFaultKeys = currentFaults;
+
+    // Compute raw confidence targets
+    const hasWeather = this.activeFaults.has('weather_degradation');
+    const hasBlindspot = this.activeFaults.has('sensor_blindspot');
+    const hasLidarFail = this.activeFaults.has('lidar_failure');
+    const hasGlare = this.activeFaults.has('camera_glare');
+    const hasGnssDrop = this.activeFaults.has('gnss_dropout');
+
+    const rawTargets: Record<string, { raw: number; reason: string; health: 'ONLINE' | 'STALE' | 'DEGRADED' | 'FAULT' }> = {
+      camera: {
+        raw: hasWeather ? 0.38 : hasGlare ? 0.28 : hasBlindspot ? 0.32 : 0.98,
+        reason: hasWeather ? 'SEVERE_FOG' : hasGlare ? 'DIRECT_SUN_GLARE' : hasBlindspot ? 'SECTOR_OCCLUSION' : 'NOMINAL_CLEAR',
+        health: hasWeather || hasGlare || hasBlindspot ? 'DEGRADED' : 'ONLINE',
+      },
+      lidar: {
+        raw: hasLidarFail ? 0.05 : hasWeather ? 0.65 : hasBlindspot ? 0.40 : 0.96,
+        reason: hasLidarFail ? 'LASER_EMITTER_TIMEOUT' : hasWeather ? 'BACKSCATTER_NOISE' : hasBlindspot ? 'SECTOR_OCCLUSION' : 'NOMINAL_CLEAR',
+        health: hasLidarFail ? 'FAULT' : hasWeather || hasBlindspot ? 'DEGRADED' : 'ONLINE',
+      },
+      radar: {
+        raw: hasWeather ? 0.98 : 0.95,
+        reason: hasWeather ? 'PENETRATES_FOG' : 'NOMINAL_CLEAR',
+        health: 'ONLINE',
+      },
+      imu: {
+        raw: 0.99,
+        reason: 'NOMINAL_CLEAR',
+        health: 'ONLINE',
+      },
+      gnss: {
+        raw: hasGnssDrop ? 0.15 : hasWeather ? 0.90 : 0.94,
+        reason: hasGnssDrop ? 'MULTIPATH_SATELLITE_LOCK_LOST' : hasWeather ? 'ATMOSPHERIC_ATTENUATION' : 'NOMINAL_CLEAR',
+        health: hasGnssDrop ? 'DEGRADED' : 'ONLINE',
+      },
+    };
+
+    // Apply EMA smoothing
+    const emaAlpha = 0.20;
+    const currentConfidenceMap: any = {};
+    const trends: Record<string, 'RISING' | 'FALLING' | 'STABLE'> = {};
+
+    (['camera', 'lidar', 'radar', 'imu', 'gnss'] as const).forEach((sensor) => {
+      const prev = (this.smoothedConfidence as any)[sensor];
+      const target = rawTargets[sensor].raw;
+      const smoothed = Math.max(0, Math.min(1, emaAlpha * target + (1 - emaAlpha) * prev));
+      (this.smoothedConfidence as any)[sensor] = smoothed;
+
+      const delta = smoothed - prev;
+      trends[sensor] = delta > 0.005 ? 'RISING' : delta < -0.005 ? 'FALLING' : 'STABLE';
+
+      currentConfidenceMap[sensor] = {
+        confidence: Math.round(smoothed * 1000) / 1000,
+        confidencePct: Math.round(smoothed * 1000) / 10,
+        trend: trends[sensor],
+        reason: rawTargets[sensor].reason,
+        health: rawTargets[sensor].health,
+      };
+    });
+
+    // Append to 15s history buffer
+    this.confidenceHistory.push({
+      timestamp: now,
+      camera: currentConfidenceMap.camera.confidence,
+      lidar: currentConfidenceMap.lidar.confidence,
+      radar: currentConfidenceMap.radar.confidence,
+      imu: currentConfidenceMap.imu.confidence,
+      gnss: currentConfidenceMap.gnss.confidence,
+    });
+
+    if (this.confidenceHistory.length > 350) {
+      this.confidenceHistory.shift();
+    }
+
+    // Arbitration check
+    const isRadarPreferred =
+      (currentConfidenceMap.camera.confidence < 0.60 || currentConfidenceMap.lidar.confidence < 0.60) &&
+      currentConfidenceMap.radar.confidence > 0.85;
+
+    const arbitration = {
+      dominant_sensor: isRadarPreferred ? 'RADAR' : 'FUSED_NOMINAL',
+      is_degraded_arbitration: isRadarPreferred,
+      weights: {
+        camera: Math.round((currentConfidenceMap.camera.confidence / (currentConfidenceMap.camera.confidence + currentConfidenceMap.lidar.confidence + currentConfidenceMap.radar.confidence)) * 100) / 100,
+        lidar: Math.round((currentConfidenceMap.lidar.confidence / (currentConfidenceMap.camera.confidence + currentConfidenceMap.lidar.confidence + currentConfidenceMap.radar.confidence)) * 100) / 100,
+        radar: Math.round((currentConfidenceMap.radar.confidence / (currentConfidenceMap.camera.confidence + currentConfidenceMap.lidar.confidence + currentConfidenceMap.radar.confidence)) * 100) / 100,
+      },
+      override_reason: isRadarPreferred
+        ? `RADAR arbitrated over CAM/LiDAR (RADAR: ${currentConfidenceMap.radar.confidencePct}%, CAM: ${currentConfidenceMap.camera.confidencePct}% [${currentConfidenceMap.camera.reason}])`
+        : 'Nominal multi-sensor optical/RF consensus',
+    };
+
+    const arbitrationText = isRadarPreferred ? ` [Sensor Arbitration: ${arbitration.override_reason}]` : '';
+
     // Multi-Hypothesis AV Decision
     let selectedAction: string = 'Maintain';
     let urgency: 'low' | 'medium' | 'high' | 'critical' = 'low';
     const reasoning: Record<string, string> = {};
 
     const hasEmergencyFault = this.activeFaults.has('manual_override');
-    const hasBlindspotFault = this.activeFaults.has('sensor_blindspot');
 
     const leadCar = trackedObjects.find((o) => Math.abs(o.position3D?.x || 0) < 1.8 && (o.position3D?.z || 99) < 25);
     const leftLaneOccupied = trackedObjects.some((o) => (o.position3D?.x || 0) < -1.5 && (o.position3D?.z || 99) < 25);
@@ -611,29 +766,29 @@ export class MockSimulationEngine {
     } else if (leadCar && (leadCar.ttc < 2.2 || leadCar.distance < 16)) {
       // Dangerous imminent collision
       urgency = 'critical';
-      reasoning['Maintain'] = `REJECTED: Imminent collision with Object #${leadCar.id} (${leadCar.class}) in ${leadCar.ttc.toFixed(1)}s.`;
+      reasoning['Maintain'] = `REJECTED: Imminent collision with Object #${leadCar.id} (${leadCar.class}) in ${leadCar.ttc.toFixed(1)}s.${arbitrationText}`;
 
       if (!leftLaneOccupied && leadCar.ttc < 1.5) {
         selectedAction = 'Swerve';
         reasoning['Brake'] = 'INSUFFICIENT: Stopping distance exceeds headway buffer.';
-        reasoning['Swerve'] = 'OPTIMAL: Left evasive maneuver path verified clear (TTC > 6.0s).';
+        reasoning['Swerve'] = `OPTIMAL: Left evasive maneuver path verified clear (TTC > 6.0s).${arbitrationText}`;
       } else {
         selectedAction = 'Emergency Braking';
-        reasoning['Brake'] = 'OPTIMAL: Full ABS braking engaged (-8.2 m/s²).';
+        reasoning['Brake'] = `OPTIMAL: Full ABS braking engaged (-8.2 m/s²).${arbitrationText}`;
         reasoning['Swerve'] = `REJECTED: Adjacent lanes occupied (Left: ${leftLaneOccupied ? 'BLOCKED' : 'CLEAR'}, Right: ${rightLaneOccupied ? 'BLOCKED' : 'CLEAR'}).`;
       }
     } else if (leadCar && leadCar.distance < 28) {
       // Moderate caution
       selectedAction = 'Brake';
       urgency = 'medium';
-      reasoning['Maintain'] = `CAUTION: Approaching lead vehicle #${leadCar.id} (${leadCar.distance.toFixed(1)}m).`;
-      reasoning['Brake'] = 'OPTIMAL: Smooth regenerative deceleration to maintain 2.5s headway.';
+      reasoning['Maintain'] = `CAUTION: Approaching lead vehicle #${leadCar.id} (${leadCar.distance.toFixed(1)}m).${arbitrationText}`;
+      reasoning['Brake'] = `OPTIMAL: Smooth regenerative deceleration to maintain 2.5s headway.${arbitrationText}`;
       reasoning['Swerve'] = 'STANDBY: Lane maintenance preferred over premature swerve.';
     } else {
       // Safe cruising
       selectedAction = 'Maintain';
       urgency = 'low';
-      reasoning['Maintain'] = 'OPTIMAL: Forward corridor clear. Cruising at target trajectory.';
+      reasoning['Maintain'] = `OPTIMAL: Forward corridor clear. Cruising at target trajectory.${arbitrationText}`;
       reasoning['Brake'] = 'STANDBY: No hazard detected within forward 60m cone.';
       reasoning['Swerve'] = 'STANDBY: Ego lane optimal for planned navigation route.';
     }
@@ -642,7 +797,7 @@ export class MockSimulationEngine {
       id: `dec-${this.frameCount}`,
       timestamp: new Date().toISOString().split('T')[1].slice(0, 12),
       action: selectedAction,
-      confidence: 0.98 - (hasBlindspotFault ? 0.25 : 0.0),
+      confidence: Math.round(currentConfidenceMap.camera.confidence * 100) / 100,
       targetSpeedKmh: Math.round(this.targetSpeed),
       reasoning,
       primaryReason: reasoning[selectedAction] || 'Nominal autonomous driving state.',
@@ -677,11 +832,11 @@ export class MockSimulationEngine {
       batterySoc: 88,
       distanceToLeadVehicle: leadCar ? leadCar.distance : 99.9,
       sensorStatus: {
-        camera: hasBlindspotFault ? 'DEGRADED' : 'HEALTHY',
-        lidar: hasLidarFail ? 'FAULT' : 'HEALTHY',
+        camera: currentConfidenceMap.camera.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
+        lidar: currentConfidenceMap.lidar.health === 'FAULT' ? 'FAULT' : currentConfidenceMap.lidar.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
         radar: 'HEALTHY',
         imu: 'HEALTHY',
-        gnss: 'HEALTHY',
+        gnss: currentConfidenceMap.gnss.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
       },
     };
 
@@ -691,6 +846,12 @@ export class MockSimulationEngine {
       objects: trackedObjects,
       decision,
       metrics: vehicleMetrics,
+      sensorConfidence: {
+        current: currentConfidenceMap,
+        history: this.confidenceHistory,
+        events: this.eventMarkers,
+        arbitration,
+      },
       ttcAlert,
       activeFaults: Array.from(this.activeFaults.keys()),
     };

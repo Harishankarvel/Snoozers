@@ -140,6 +140,11 @@
         this.throttle = 45;
         this.roadOffset = 0;
         this.activeFaults = new Map();
+        this.smoothedConfidence = { camera: 0.98, lidar: 0.96, radar: 0.95, imu: 0.99, gnss: 0.94 };
+        this.confidenceHistory = [];
+        this.eventMarkers = [];
+        this.eventCounter = 0;
+        this.lastFaultKeys = new Set();
         this.objects = [
           { id: 101, class: 'car', lane: 0, distanceZ: 38.0, lateralOffset: 0.0, speedKmh: 65.0, color: '#00F0FF' },
           { id: 102, class: 'truck', lane: 1, distanceZ: 55.0, lateralOffset: 0.8, speedKmh: 52.0, color: '#FFB800' },
@@ -386,6 +391,86 @@
           }
         });
 
+        // Compute Temporal Sensor Confidence Evolution
+        const now = Date.now();
+        const currentFaults = new Set(this.activeFaults.keys());
+        currentFaults.forEach(f => {
+          if (!this.lastFaultKeys.has(f)) {
+            this.eventCounter++;
+            this.eventMarkers.push({
+              id: `evt-${this.eventCounter}`,
+              timestamp: now,
+              timeLabel: new Date().toTimeString().split(' ')[0],
+              event: `${f.toUpperCase().replace(/_/g, ' ')} STARTED`,
+              reason: `Fault condition '${f}' activated`,
+              severity: f.includes('failure') || f.includes('override') ? 'WARNING' : 'CAUTION'
+            });
+            if (this.eventMarkers.length > 20) this.eventMarkers.shift();
+          }
+        });
+        this.lastFaultKeys.forEach(f => {
+          if (!currentFaults.has(f)) {
+            this.eventCounter++;
+            this.eventMarkers.push({
+              id: `evt-${this.eventCounter}`,
+              timestamp: now,
+              timeLabel: new Date().toTimeString().split(' ')[0],
+              event: `${f.toUpperCase().replace(/_/g, ' ')} RESOLVED`,
+              reason: `Condition '${f}' cleared, sensors recovering`,
+              severity: 'INFO'
+            });
+            if (this.eventMarkers.length > 20) this.eventMarkers.shift();
+          }
+        });
+        this.lastFaultKeys = currentFaults;
+
+        const hasWeather = this.activeFaults.has('weather_degradation');
+        const hasBlindspot = this.activeFaults.has('sensor_blindspot');
+        const hasLidarFail = this.activeFaults.has('lidar_failure');
+
+        const rawTargets = {
+          camera: { raw: hasWeather ? 0.38 : hasBlindspot ? 0.32 : 0.98, reason: hasWeather ? 'SEVERE_FOG' : hasBlindspot ? 'SECTOR_OCCLUSION' : 'NOMINAL_CLEAR', health: hasWeather || hasBlindspot ? 'DEGRADED' : 'ONLINE' },
+          lidar: { raw: hasLidarFail ? 0.05 : hasWeather ? 0.65 : hasBlindspot ? 0.40 : 0.96, reason: hasLidarFail ? 'LASER_EMITTER_TIMEOUT' : hasWeather ? 'BACKSCATTER_NOISE' : hasBlindspot ? 'SECTOR_OCCLUSION' : 'NOMINAL_CLEAR', health: hasLidarFail ? 'FAULT' : hasWeather || hasBlindspot ? 'DEGRADED' : 'ONLINE' },
+          radar: { raw: hasWeather ? 0.98 : 0.95, reason: hasWeather ? 'PENETRATES_FOG' : 'NOMINAL_CLEAR', health: 'ONLINE' },
+          imu: { raw: 0.99, reason: 'NOMINAL_CLEAR', health: 'ONLINE' },
+          gnss: { raw: hasWeather ? 0.90 : 0.94, reason: hasWeather ? 'ATMOSPHERIC_ATTENUATION' : 'NOMINAL_CLEAR', health: 'ONLINE' }
+        };
+
+        const emaAlpha = 0.20;
+        const currentConf = {};
+        ['camera', 'lidar', 'radar', 'imu', 'gnss'].forEach(s => {
+          const prev = this.smoothedConfidence[s];
+          const target = rawTargets[s].raw;
+          const smoothed = Math.max(0, Math.min(1, emaAlpha * target + (1 - emaAlpha) * prev));
+          this.smoothedConfidence[s] = smoothed;
+          const delta = smoothed - prev;
+          currentConf[s] = {
+            confidence: Math.round(smoothed * 1000) / 1000,
+            confidencePct: Math.round(smoothed * 1000) / 10,
+            trend: delta > 0.005 ? 'RISING' : delta < -0.005 ? 'FALLING' : 'STABLE',
+            reason: rawTargets[s].reason,
+            health: rawTargets[s].health
+          };
+        });
+
+        this.confidenceHistory.push({
+          timestamp: now,
+          camera: currentConf.camera.confidence,
+          lidar: currentConf.lidar.confidence,
+          radar: currentConf.radar.confidence,
+          imu: currentConf.imu.confidence,
+          gnss: currentConf.gnss.confidence
+        });
+        if (this.confidenceHistory.length > 350) this.confidenceHistory.shift();
+
+        const isRadarPreferred = (currentConf.camera.confidence < 0.60 || currentConf.lidar.confidence < 0.60) && currentConf.radar.confidence > 0.85;
+        const arbitration = {
+          dominant_sensor: isRadarPreferred ? 'RADAR' : 'FUSED_NOMINAL',
+          is_degraded_arbitration: isRadarPreferred,
+          override_reason: isRadarPreferred ? `RADAR arbitrated over CAM/LiDAR (RADAR: ${currentConf.radar.confidencePct}%, CAM: ${currentConf.camera.confidencePct}% [${currentConf.camera.reason}])` : 'Nominal multi-sensor optical/RF consensus'
+        };
+        const arbitrationText = isRadarPreferred ? ` [Sensor Arbitration: ${arbitration.override_reason}]` : '';
+
         let action = 'Maintain';
         let urgency = 'low';
         const reasoning = {};
@@ -397,16 +482,16 @@
         } else if (lead && (lead.ttc < 2.2 || lead.distance < 16)) {
           urgency = 'critical';
           action = lead.ttc < 1.5 ? 'Swerve' : 'Emergency Braking';
-          reasoning['Maintain'] = `REJECTED: Collision risk with Target #${lead.id} in ${lead.ttc.toFixed(1)}s.`;
-          reasoning['Brake'] = 'OPTIMAL: Full ABS brake deceleration active.';
+          reasoning['Maintain'] = `REJECTED: Collision risk with Target #${lead.id} in ${lead.ttc.toFixed(1)}s.${arbitrationText}`;
+          reasoning['Brake'] = `OPTIMAL: Full ABS brake deceleration active.${arbitrationText}`;
           reasoning['Swerve'] = 'STANDBY: Adjacent lane verification in progress.';
         } else if (lead && lead.distance < 28) {
           action = 'Brake'; urgency = 'medium';
-          reasoning['Maintain'] = `CAUTION: Approaching lead Target #${lead.id} (${lead.distance.toFixed(1)}m).`;
-          reasoning['Brake'] = 'OPTIMAL: Smooth regenerative braking applied.';
+          reasoning['Maintain'] = `CAUTION: Approaching lead Target #${lead.id} (${lead.distance.toFixed(1)}m).${arbitrationText}`;
+          reasoning['Brake'] = `OPTIMAL: Smooth regenerative braking applied.${arbitrationText}`;
         } else {
           action = 'Maintain'; urgency = 'low';
-          reasoning['Maintain'] = 'OPTIMAL: Forward travel corridor clear.';
+          reasoning['Maintain'] = `OPTIMAL: Forward travel corridor clear.${arbitrationText}`;
         }
 
         const packet = {
@@ -417,7 +502,7 @@
             id: `dec-${this.frameCount}`,
             timestamp: new Date().toTimeString().split(' ')[0] + `.${Math.floor(Date.now()%1000/100)}`,
             action,
-            confidence: 0.96,
+            confidence: Math.round(currentConf.camera.confidence * 100) / 100,
             targetSpeedKmh: Math.round(this.targetSpeed),
             reasoning,
             primaryReason: reasoning[action] || 'Nominal autonomous driving.',
@@ -436,7 +521,19 @@
             driveMode: this.activeFaults.has('manual_override') ? 'MANUAL_OVERRIDE' : 'AUTONOMOUS',
             batterySoc: 89,
             distanceToLeadVehicle: lead ? lead.distance : 99.9,
-            sensorStatus: { camera: 'HEALTHY', lidar: 'HEALTHY', radar: 'HEALTHY', imu: 'HEALTHY', gnss: 'HEALTHY' }
+            sensorStatus: {
+              camera: currentConf.camera.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
+              lidar: currentConf.lidar.health === 'FAULT' ? 'FAULT' : currentConf.lidar.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
+              radar: 'HEALTHY',
+              imu: 'HEALTHY',
+              gnss: currentConf.gnss.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY'
+            }
+          },
+          sensorConfidence: {
+            current: currentConf,
+            history: this.confidenceHistory,
+            events: this.eventMarkers,
+            arbitration
           },
           ttcAlert: {
             level: minTtc < 2.5 ? 'CRITICAL' : minTtc < 4.5 ? 'CAUTION' : 'SAFE',
@@ -452,6 +549,158 @@
       }
     }
     const mockEngine = new MockEngine();
+
+    // --- SensorConfidencePanel Component ---
+    function SensorConfidencePanel({ confidenceData }) {
+      const canvasRef = React.useRef(null);
+      const [selectedEvent, setSelectedEvent] = useState(null);
+      const current = confidenceData?.current;
+      const history = confidenceData?.history || [];
+      const events = confidenceData?.events || [];
+      const arbitration = confidenceData?.arbitration;
+
+      const SENSORS = {
+        camera: { label: 'CAM', color: '#00F0FF' },
+        lidar: { label: 'LIDAR', color: '#A855F7' },
+        radar: { label: 'RADAR', color: '#10B981' },
+        imu: { label: 'IMU', color: '#F59E0B' },
+        gnss: { label: 'GNSS', color: '#3B82F6' }
+      };
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+
+        ctx.fillStyle = '#050A14';
+        ctx.fillRect(0, 0, width, height);
+
+        const pad = { top: 15, right: 25, bottom: 20, left: 35 };
+        const gW = width - pad.left - pad.right;
+        const gH = height - pad.top - pad.bottom;
+
+        // Grid
+        ctx.strokeStyle = '#121E31';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#64748B';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+
+        [0, 50, 100].forEach(p => {
+          const y = pad.top + gH - (p / 100) * gH;
+          ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y); ctx.stroke();
+          ctx.fillText(`${p}%`, pad.left - 4, y + 3);
+        });
+
+        if (history.length < 2) return;
+        const latestTs = history[history.length - 1].timestamp;
+        const windowMs = 15000;
+        const startTs = latestTs - windowMs;
+
+        const getPt = (ts, val) => {
+          const x = pad.left + Math.max(0, Math.min(1, (ts - startTs) / windowMs)) * gW;
+          const y = pad.top + gH - Math.max(0, Math.min(1, val)) * gH;
+          return { x, y };
+        };
+
+        // Event lines
+        events.forEach(evt => {
+          if (evt.timestamp >= startTs && evt.timestamp <= latestTs) {
+            const { x } = getPt(evt.timestamp, 0.5);
+            ctx.save();
+            ctx.strokeStyle = evt.severity === 'WARNING' ? 'rgba(244, 63, 94, 0.6)' : 'rgba(250, 204, 21, 0.6)';
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, height - pad.bottom); ctx.stroke();
+            ctx.restore();
+          }
+        });
+
+        // Lines
+        Object.keys(SENSORS).forEach(k => {
+          ctx.strokeStyle = SENSORS[k].color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          let first = true;
+          history.forEach(pt => {
+            if (pt.timestamp < startTs) return;
+            const { x, y } = getPt(pt.timestamp, pt[k] ?? 0.95);
+            if (first) { ctx.moveTo(x, y); first = false; } else { ctx.lineTo(x, y); }
+          });
+          ctx.stroke();
+        });
+      }, [history, events]);
+
+      return (
+        <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-3 shadow-lg">
+          <div className="flex justify-between items-center border-b border-[#1A2638] pb-2 text-xs font-mono">
+            <span className="text-cyan-400 font-bold uppercase tracking-wider">SENSOR CONFIDENCE EVOLUTION &amp; ARBITRATION MATRIX</span>
+            {arbitration?.is_degraded_arbitration ? (
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[11px] font-bold animate-pulse">
+                🛡️ RADAR ARBITRATION OVERRIDE ACTIVE
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[11px]">
+                ✨ MULTI-SENSOR CONSENSUS (NOMINAL)
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 font-mono text-xs">
+            {Object.entries(SENSORS).map(([k, cfg]) => {
+              const item = current ? current[k] : null;
+              const pct = item?.confidencePct ?? (item?.confidence ? item.confidence * 100 : 95);
+              const isLow = pct < 60;
+              const isCrit = pct < 30;
+              return (
+                <div key={k} className={`p-2.5 rounded-lg border flex flex-col gap-1.5 ${isCrit ? 'bg-rose-950/20 border-rose-500/40' : isLow ? 'bg-amber-950/20 border-amber-500/40' : 'bg-[#050A14] border-[#141E2F]'}`}>
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="font-bold text-slate-200">{k.toUpperCase()}</span>
+                    <span className={`text-[10px] px-1 rounded font-bold ${item?.health === 'DEGRADED' ? 'bg-amber-500/20 text-amber-300' : item?.health === 'FAULT' ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                      {item?.health || 'ONLINE'}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between">
+                    <span className={`text-xl font-bold ${isCrit ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-slate-100'}`}>
+                      {pct.toFixed(1)}%
+                    </span>
+                    <span className="text-[10px] text-slate-400">{item?.trend || 'STABLE'}</span>
+                  </div>
+                  <div className="w-full h-1 bg-[#121E31] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: isCrit ? '#F43F5E' : isLow ? '#F59E0B' : cfg.color }} />
+                  </div>
+                  <div className="text-[9px] text-slate-400 truncate">[{item?.reason || 'NOMINAL_CLEAR'}]</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-[#050A14] rounded-lg border border-[#141E2F] p-2.5 flex flex-col gap-1.5">
+            <div className="flex justify-between items-center text-xs font-mono text-slate-300">
+              <span className="font-bold">15-SECOND ROLLING TEMPORAL CONFIDENCE GRAPH</span>
+              <div className="flex gap-2 text-[10px]">
+                {Object.entries(SENSORS).map(([k, cfg]) => (
+                  <span key={k} className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
+                    <span>{k.toUpperCase()}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="w-full h-28 relative rounded overflow-hidden">
+              <canvas ref={canvasRef} className="w-full h-full block" />
+            </div>
+          </div>
+        </section>
+      );
+    }
 
     // --- Main App React Component ---
     function App() {
@@ -784,6 +1033,9 @@
                 </div>
               </aside>
             </div>
+
+            {/* Middle Section: Sensor Confidence Evolution Panel */}
+            <SensorConfidencePanel confidenceData={telemetry?.sensorConfidence} />
 
             {/* Bottom Row: Decision Log & Control Panel */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">

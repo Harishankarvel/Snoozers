@@ -22,9 +22,10 @@ def main():
     
     # Test DecisionEngine
     engine = DecisionEngine()
-    action, reasoning = engine.evaluate_maneuvers(objects_3d)
-    print(f"Action: {action}")
-    print(f"Reasoning: {reasoning}")
+    result = engine.evaluate_hazard_event_ml(objects_3d)
+    print(f"Action: {result.get('action')}")
+    print(f"Risk Level: {result.get('risk_level')}")
+    print(f"Reasoning: {result.get('hypotheses_reasoning')}")
     
     print("All internal modules ran successfully!")
 

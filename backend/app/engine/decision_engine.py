@@ -60,24 +60,37 @@ class GuidanceModule:
                 
         return [ego_speed, min_ttc, closest_z, max_rel_vel, has_converging]
 
-    def evaluate_hazard_event_ml(self, objects_3d: List[Dict[str, Any]], ego_speed: float = 60.0) -> Dict[str, Any]:
+    def evaluate_hazard_event_ml(
+        self,
+        objects_3d: List[Dict[str, Any]],
+        ego_speed: float = 60.0,
+        sensor_confidence: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
-        Evaluates hazard events using the trained ML model.
-        Returns the risk level, action, and metrics including inference latency.
+        Evaluates hazard events using the trained ML model with confidence-weighted sensor arbitration.
+        Returns the risk level, action, arbitration chain, and metrics including inference latency.
         """
         start_time = time.time()
+        arbitration_info = sensor_confidence.get("arbitration") if sensor_confidence else None
+        arbitration_text = ""
+        if arbitration_info and arbitration_info.get("is_degraded_arbitration"):
+            arbitration_text = f" [Sensor Arbitration: {arbitration_info.get('override_reason', '')}]"
         
         if not objects_3d:
             latency = (time.time() - start_time) * 1000.0
+            reason_str = "ACCEPTED: Path is clear."
+            if arbitration_text:
+                reason_str += arbitration_text
             return {
                 "risk_level": "LOW",
                 "action": "Maintain Course",
-                "justification": "No path conflict predicted (ML).",
+                "justification": f"No path conflict predicted (ML).{arbitration_text}",
                 "min_ttc": float('inf'),
                 "primary_hazard": None,
-                "hypotheses_reasoning": {"Maintain Course": "ACCEPTED: Path is clear."},
+                "hypotheses_reasoning": {"Maintain Course": reason_str},
                 "target_speed_kmh": ego_speed,
-                "latency_ms": latency
+                "latency_ms": latency,
+                "arbitration": arbitration_info
             }
             
         if self.ml_mode:
@@ -86,7 +99,7 @@ class GuidanceModule:
             action = self.action_model.predict([features])[0]
         else:
             # Fallback
-            result = self.evaluate_hazard_event(objects_3d, ego_speed)
+            result = self.evaluate_hazard_event(objects_3d, ego_speed, sensor_confidence=sensor_confidence)
             risk_level = result["risk_level"]
             action = result["action"]
             
@@ -102,34 +115,61 @@ class GuidanceModule:
 
         if action == "Maintain Course":
             target_speed = ego_speed
+            reasoning = {
+                "Maintain Course": f"ACCEPTED via ML Model (Latency: {(time.time() - start_time) * 1000.0:.2f}ms){arbitration_text}",
+                "Brake / Reroute Now": "STANDBY: Forward trajectory clear.",
+                "Slow & Prepare to Yield": "STANDBY: Nominal cruising."
+            }
         elif action == "Slow & Prepare to Yield":
             target_speed = max(25.0, ego_speed * 0.6)
+            reasoning = {
+                "Slow & Prepare to Yield": f"ACCEPTED: Hazard approaching safety window.{arbitration_text}",
+                "Maintain Course": f"REJECTED: Caution threshold violated.{arbitration_text}",
+                "Brake / Reroute Now": "STANDBY: Controlled deceleration sufficient."
+            }
         else:
             target_speed = 0.0
+            reasoning = {
+                "Brake / Reroute Now": f"ACCEPTED: Imminent path conflict confirmed.{arbitration_text}",
+                "Maintain Course": f"REJECTED: High collision risk.{arbitration_text}",
+                "Slow & Prepare to Yield": "INSUFFICIENT: Stopping distance buffer exceeded."
+            }
 
         latency = (time.time() - start_time) * 1000.0
         return {
             "risk_level": risk_level,
             "action": action,
-            "justification": f"ML Predicted Risk: {risk_level}, Action: {action}",
+            "justification": f"ML Predicted Risk: {risk_level}, Action: {action}{arbitration_text}",
             "min_ttc": round(min_ttc, 2) if min_ttc != float('inf') else 99.9,
             "primary_hazard": primary_hazard,
-            "hypotheses_reasoning": {action: f"ACCEPTED via ML Model (Latency: {latency:.2f}ms)"},
+            "hypotheses_reasoning": reasoning,
             "target_speed_kmh": round(target_speed, 1),
-            "latency_ms": latency
+            "latency_ms": latency,
+            "arbitration": arbitration_info
         }
 
-    def evaluate_hazard_event(self, objects_3d: List[Dict[str, Any]], ego_speed: float = 60.0) -> Dict[str, Any]:
-        """Heuristic fallback method"""
+    def evaluate_hazard_event(
+        self,
+        objects_3d: List[Dict[str, Any]],
+        ego_speed: float = 60.0,
+        sensor_confidence: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Heuristic fallback method with confidence weighting"""
+        arbitration_info = sensor_confidence.get("arbitration") if sensor_confidence else None
+        arbitration_text = ""
+        if arbitration_info and arbitration_info.get("is_degraded_arbitration"):
+            arbitration_text = f" [Sensor Arbitration: {arbitration_info.get('override_reason', '')}]"
+
         if not objects_3d:
             return {
                 "risk_level": "LOW",
                 "action": "Maintain Course",
-                "justification": "No path conflict predicted.",
+                "justification": f"No path conflict predicted.{arbitration_text}",
                 "min_ttc": float('inf'),
                 "primary_hazard": None,
-                "hypotheses_reasoning": {"Maintain Course": "ACCEPTED: Path is clear."},
-                "target_speed_kmh": ego_speed
+                "hypotheses_reasoning": {"Maintain Course": f"ACCEPTED: Path is clear.{arbitration_text}"},
+                "target_speed_kmh": ego_speed,
+                "arbitration": arbitration_info
             }
 
         min_ttc = float('inf')
@@ -153,21 +193,21 @@ class GuidanceModule:
         if not has_path_conflict or min_ttc >= self.ttc_caution:
             risk_level = "LOW"
             action = "Maintain Course"
-            justification = "No conflict."
+            justification = f"No conflict.{arbitration_text}"
             target_speed = ego_speed
-            reasoning = {"Maintain Course": "ACCEPTED"}
+            reasoning = {"Maintain Course": f"ACCEPTED{arbitration_text}"}
         elif self.ttc_critical <= min_ttc < self.ttc_caution:
             risk_level = "MEDIUM"
             action = "Slow & Prepare to Yield"
-            justification = "Caution window."
+            justification = f"Caution window.{arbitration_text}"
             target_speed = max(25.0, ego_speed * 0.6)
-            reasoning = {"Slow & Prepare to Yield": "ACCEPTED"}
+            reasoning = {"Slow & Prepare to Yield": f"ACCEPTED{arbitration_text}"}
         else:
             risk_level = "HIGH"
             action = "Brake / Reroute Now"
-            justification = "Below safety threshold."
+            justification = f"Below safety threshold.{arbitration_text}"
             target_speed = 0.0
-            reasoning = {"Brake / Reroute Now": "ACCEPTED"}
+            reasoning = {"Brake / Reroute Now": f"ACCEPTED{arbitration_text}"}
 
         return {
             "risk_level": risk_level,
@@ -176,9 +216,11 @@ class GuidanceModule:
             "min_ttc": round(min_ttc, 2) if min_ttc != float('inf') else 99.9,
             "primary_hazard": primary_hazard,
             "hypotheses_reasoning": reasoning,
-            "target_speed_kmh": round(target_speed, 1)
+            "target_speed_kmh": round(target_speed, 1),
+            "arbitration": arbitration_info
         }
 
 # Alias for backwards compatibility
 DecisionEngine = GuidanceModule
+
 

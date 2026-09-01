@@ -77,18 +77,37 @@ A high-throughput, dark-mode web dashboard for an **Autonomous Vehicle (AV) Deci
 
 ## 🚀 Getting Started
 
-### 1. Run Backend Server (FastAPI)
+### 1. Environment Setup (Python 3.11.9)
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Create virtual environment with Python 3.11.9
+py -3.11 -m venv .venv
+
+# Activate virtual environment
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Windows (cmd):
+.venv\Scripts\activate.bat
+# Linux/macOS:
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r backend/requirements.txt
 ```
 
-### 2. Open the Web Dashboard
+### 2. Run Backend Server (FastAPI)
+```bash
+uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000 --reload
+```
+
+### 3. Open the Web Dashboard
 - Open **`http://localhost:8000`** in your browser.
 - Alternatively, open `dashboard.html` directly in any web browser.
 
-### 3. Run Automated WebSocket Tests
+### 4. Run Automated Tests
 ```bash
+# Run guidance module scenario benchmarks
+python backend/simulate_guidance_test_cases.py
+
+# Run WebSocket test suite
 python backend/test_websockets.py
 ```

@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 from typing import List, Dict, Any
 
 from app.engine.decision_engine import DecisionEngine
+from app.engine.sensor_confidence import SensorConfidenceTracker
 from app.perception.projection import ProjectionMap
 from app.perception.tracker import Tracker
 
@@ -20,6 +21,7 @@ class ConnectionManager:
         self.active_video_connections: List[WebSocket] = []
         self.active_faults: Dict[str, Dict[str, Any]] = {}
         self.decision_engine = DecisionEngine()
+        self.confidence_tracker = SensorConfidenceTracker()
         self.projection_map = ProjectionMap()
         self.tracker = Tracker()
         self.frame_count = 0
@@ -248,12 +250,27 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     objects_3d.append({"id": 777, "class": "pedestrian", "x": -0.8, "y": 0.0, "z": 18.0})
 
                 # Update distance travelled based on speed (km/h -> m/s) and time delta (0.05s)
-                self.total_distance_travelled += (manager.ego_speed * 1000 / 3600) * 0.05
+                manager.total_distance_travelled += (manager.ego_speed * 1000 / 3600) * 0.05
                 # Update path deviation (simple accumulation of steering angle over time)
-                self.path_deviation += abs(math.sin(manager.frame_count * 0.03) * 1.5) * 0.05
+                manager.path_deviation += abs(math.sin(manager.frame_count * 0.03) * 1.5) * 0.05
 
-                # Run ML Decision Engine
-                result = manager.decision_engine.evaluate_hazard_event_ml(objects_3d, ego_speed=manager.ego_speed)
+                # Update Sensor Confidence Evolution Engine
+                ego_dynamics = {
+                    "acceleration_g": -0.45 if manager.brake_pressure > 0 else 0.05,
+                    "lateral_g": round(math.sin(manager.frame_count * 0.03) * 0.05, 3)
+                }
+                confidence_data = manager.confidence_tracker.update(
+                    active_faults=manager.active_faults,
+                    ego_dynamics=ego_dynamics,
+                    timestamp=now
+                )
+
+                # Run ML Decision Engine with Confidence Arbitration
+                result = manager.decision_engine.evaluate_hazard_event_ml(
+                    objects_3d,
+                    ego_speed=manager.ego_speed,
+                    sensor_confidence=confidence_data
+                )
                 action = result["action"]
                 reasoning = result["hypotheses_reasoning"]
                 manager.last_inference_latency = result.get("latency_ms", 0.0)
@@ -323,10 +340,10 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                         "id": f"dec-{manager.frame_count}",
                         "timestamp": time.strftime("%H:%M:%S") + f".{int(time.time() * 10) % 10}",
                         "action": action,
-                        "confidence": 0.95 - (0.2 if has_blindspot else 0.0),
+                        "confidence": round(confidence_data["current"]["camera"]["confidence"], 2),
                         "targetSpeedKmh": 70 if action == "Maintain" else 35 if action == "Brake" else 0,
                         "reasoning": reasoning,
-                        "primaryReason": reasoning.get(action, "Nominal autonomous cruising."),
+                        "primaryReason": reasoning.get(action, result.get("justification", "Nominal autonomous cruising.")),
                         "urgency": "critical" if min_ttc < 2.5 or has_emergency else "medium" if min_ttc < 4.5 else "low"
                     },
                     "metrics": {
@@ -343,17 +360,18 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                         "batterySoc": 91,
                         "distanceToLeadVehicle": lead_z,
                         "sensorStatus": {
-                            "camera": "DEGRADED" if has_blindspot else "HEALTHY",
-                            "lidar": "HEALTHY",
+                            "camera": "DEGRADED" if confidence_data["current"]["camera"]["health"] != "ONLINE" else "HEALTHY",
+                            "lidar": "FAULT" if confidence_data["current"]["lidar"]["health"] == "FAULT" else "DEGRADED" if confidence_data["current"]["lidar"]["health"] == "DEGRADED" else "HEALTHY",
                             "radar": "HEALTHY",
                             "imu": "HEALTHY",
-                            "gnss": "HEALTHY"
+                            "gnss": "DEGRADED" if confidence_data["current"]["gnss"]["health"] != "ONLINE" else "HEALTHY"
                         },
-                        "totalDistanceTravelledMeters": round(self.total_distance_travelled, 2),
-                        "hazardEventsTackled": self.hazard_events_tackled,
-                        "pathDeviationTotal": round(self.path_deviation, 2),
+                        "totalDistanceTravelledMeters": round(manager.total_distance_travelled, 2),
+                        "hazardEventsTackled": manager.hazard_events_tackled,
+                        "pathDeviationTotal": round(manager.path_deviation, 2),
                         "inferenceLatencyMs": round(manager.last_inference_latency, 2)
                     },
+                    "sensorConfidence": confidence_data,
                     "ttcAlert": {
                         "level": "CRITICAL" if min_ttc < 2.5 else "CAUTION" if min_ttc < 4.5 else "SAFE",
                         "ttcSeconds": round(min_ttc, 1) if min_ttc != float('inf') else 99.9,

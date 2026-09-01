@@ -1,0 +1,10 @@
+scenario,dataset_file,timestamp_offset,ego_speed_kmh,hazard_summary,distance_meters,calculated_ttc_sec,risk_level,action,justification,test_passed
+Nominal Highway Cruising (Low Risk),dataset_low_risk.json,0.0,65.0,#101 car,52.0,11.56,LOW,Maintain Course,No conflict.,True
+Nominal Highway Cruising (Low Risk),dataset_low_risk.json,0.5,65.0,#101 car,50.0,12.5,LOW,Maintain Course,No conflict.,True
+Nominal Highway Cruising (Low Risk),dataset_low_risk.json,1.0,64.8,#101 car,48.0,13.71,LOW,Maintain Course,No conflict.,True
+Converging Traffic in Caution Window (Medium Risk),dataset_medium_risk.json,0.0,60.0,#201 car,28.0,3.73,MEDIUM,Slow & Prepare to Yield,Caution window.,True
+Converging Traffic in Caution Window (Medium Risk),dataset_medium_risk.json,0.5,58.0,#201 car,24.0,3.43,MEDIUM,Slow & Prepare to Yield,Caution window.,True
+Converging Traffic in Caution Window (Medium Risk),dataset_medium_risk.json,1.0,52.0,#201 car,21.0,3.5,MEDIUM,Slow & Prepare to Yield,Caution window.,True
+Critical Jaywalking & Cut-In Hazard (High Risk),dataset_high_risk.json,0.0,50.0,#301 pedestrian,14.2,1.23,HIGH,Brake / Reroute Now,Below safety threshold.,True
+Critical Jaywalking & Cut-In Hazard (High Risk),dataset_high_risk.json,0.3,42.0,#301 pedestrian,10.5,1.05,HIGH,Brake / Reroute Now,Below safety threshold.,True
+Critical Jaywalking & Cut-In Hazard (High Risk),dataset_high_risk.json,0.6,20.0,#301 pedestrian,6.8,1.24,HIGH,Brake / Reroute Now,Below safety threshold.,True

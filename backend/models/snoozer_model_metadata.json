@@ -1,0 +1,43 @@
+{
+  "dataset_path": "d:\\Snoozers\\backend\\datasets\\snoozer_events.csv",
+  "total_samples": 1500,
+  "target_distribution": {
+    "0": 750,
+    "1": 750
+  },
+  "classifier": {
+    "model_type": "RandomForestClassifier",
+    "features": [
+      "id_num",
+      "has_alert",
+      "time_of_alert_filled"
+    ],
+    "accuracy": 1.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1_score": 1.0,
+    "roc_auc": 1.0,
+    "cv_roc_auc_mean": 1.0,
+    "feature_importances": {
+      "id_num": 0.36,
+      "has_alert": 0.36,
+      "time_of_alert_filled": 0.28
+    }
+  },
+  "event_time_regressor": {
+    "model_type": "GradientBoostingRegressor",
+    "features": [
+      "id_num",
+      "time_of_alert"
+    ],
+    "r2_score": 0.9519237023465986,
+    "mae_seconds": 0.549239456639847,
+    "rmse_seconds": 0.8980964149618889
+  },
+  "lead_time_stats": {
+    "mean_lead_seconds": 1.6003573333333334,
+    "std_lead_seconds": 0.8660634357901499,
+    "min_lead_seconds": 0.0329999999999977,
+    "max_lead_seconds": 4.466000000000001
+  }
+}

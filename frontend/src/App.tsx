@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { MainVideoFeed } from './components/MainVideoFeed';
 import { TelemetrySidebar } from './components/TelemetrySidebar';
+import { SensorConfidencePanel } from './components/SensorConfidencePanel';
 import { DecisionLog } from './components/DecisionLog';
 import { ControlPanel } from './components/ControlPanel';
 import { 
@@ -147,6 +148,9 @@ export const App: React.FC = () => {
           {/* Right Side: Real-Time Telemetry & Dynamics Sidebar */}
           <TelemetrySidebar telemetry={currentTelemetry} />
         </div>
+
+        {/* Middle Section: Sensor Confidence Evolution & Temporal Arbitration Matrix */}
+        <SensorConfidencePanel confidenceData={currentTelemetry?.sensorConfidence} />
 
         {/* Bottom Section: Decision Log & Control Panel */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch">
