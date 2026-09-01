@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { MainVideoFeed } from './components/MainVideoFeed';
 import { TelemetrySidebar } from './components/TelemetrySidebar';
-import { DecisionLog } from './components/DecisionLog';
 import { ControlPanel } from './components/ControlPanel';
+import { ArbiterDecisionTab } from './components/ArbiterDecisionTab';
 import { EndJourneyModal } from './components/EndJourneyModal';
 import { 
   FaultInjectionPayload, 
@@ -14,6 +14,9 @@ import { avWebSocketService } from './services/websocketService';
 import { mockSimulationEngine } from './services/mockSimulation';
 
 export const App: React.FC = () => {
+  // Navigation Tab State: 'mission' (Live HUD) vs 'arbiter' (Autonomous Decision & Arbiter Log)
+  const [activeTab, setActiveTab] = useState<'mission' | 'arbiter'>('mission');
+
   // Mode toggle: Default to false (Live Backend Mode ws://localhost:8000)
   const [isMockMode, setIsMockMode] = useState(false);
 
@@ -135,7 +138,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#05070B] text-slate-100 flex flex-col antialiased font-sans select-none">
-      {/* Top Fixed Header */}
+      {/* Top Fixed Header with Tab Navigation */}
       <Header
         videoMetrics={videoMetrics}
         telemetryMetrics={telemetryMetrics}
@@ -143,38 +146,47 @@ export const App: React.FC = () => {
         onToggleMockMode={() => setIsMockMode(!isMockMode)}
         onEmergencyStop={handleEmergencyStop}
         activeFaultsCount={activeFaults.length}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
       />
 
-      {/* Main Grid Dashboard */}
+      {/* Main Tabbed Application View */}
       <main className="flex-1 p-3 sm:p-4 max-w-[1920px] w-full mx-auto flex flex-col gap-3 sm:gap-4">
-        {/* Top Section: Main Video Feed Canvas & Telemetry Sidebar */}
-        <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-stretch">
-          {/* Central Live Video & Perception HUD Feed */}
-          <MainVideoFeed
-            latestTelemetryRef={latestTelemetryRef}
-            latestFrameBlobRef={latestFrameBlobRef}
-            isMockMode={isMockMode}
-          />
+        {activeTab === 'mission' ? (
+          /* TAB 1: Live Mission HUD & Controls */
+          <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-start">
+            {/* Left Column: Front Aperture Video Feed + Edge Cases directly beneath */}
+            <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-w-0 w-full">
+              {/* Central Live Video & Perception HUD Feed */}
+              <MainVideoFeed
+                latestTelemetryRef={latestTelemetryRef}
+                latestFrameBlobRef={latestFrameBlobRef}
+                isMockMode={isMockMode}
+              />
 
-          {/* Right Side: Real-Time Telemetry & Dynamics Sidebar */}
-          <TelemetrySidebar 
-            telemetry={currentTelemetry}
-            onEndJourney={handleEndJourney}
-            onResetTrip={handleResetTrip}
-          />
-        </div>
+              {/* Edge-Case & Fault Injection Controls directly beneath Front Aperture */}
+              <ControlPanel
+                onInjectFault={handleInjectFault}
+                activeFaults={activeFaults}
+              />
+            </div>
 
-        {/* Bottom Section: Decision Log & Control Panel */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch">
-          {/* Left: Auto-Scrolling Decision Terminal */}
-          <DecisionLog latestTelemetry={currentTelemetry} />
-
-          {/* Right: Edge-Case & Fault Injection Panel */}
-          <ControlPanel
-            onInjectFault={handleInjectFault}
+            {/* Right Column: Cleaned Real-Time Telemetry & Dynamics Sidebar */}
+            <div className="w-full lg:w-[380px] xl:w-[420px] 2xl:w-[460px] flex-shrink-0">
+              <TelemetrySidebar 
+                telemetry={currentTelemetry}
+                onEndJourney={handleEndJourney}
+                onResetTrip={handleResetTrip}
+              />
+            </div>
+          </div>
+        ) : (
+          /* TAB 2: Dedicated Autonomous Decision Stream & Arbiter Log */
+          <ArbiterDecisionTab
+            latestTelemetry={currentTelemetry}
             activeFaults={activeFaults}
           />
-        </div>
+        )}
       </main>
 
       {/* End of Journey Summary Modal */}

@@ -3,19 +3,10 @@ import {
   Gauge, 
   ShieldAlert, 
   Compass, 
-  Car, 
-  Users, 
-  Bike, 
-  Truck, 
-  AlertOctagon, 
   Activity, 
   Zap,
-  Target,
-  ArrowUpRight,
   Radio,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle
+  AlertTriangle
 } from 'lucide-react';
 import { TelemetryPacket } from '../types/telemetry';
 
@@ -32,14 +23,7 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
 }) => {
   const metrics = telemetry?.metrics;
   const ttcAlert = telemetry?.ttcAlert;
-  const objects = telemetry?.objects || [];
 
-  // Categorize detected objects
-  const carsCount = objects.filter((o) => o.class === 'car').length;
-  const activePedestrians = metrics?.activePedestriansCount ?? objects.filter((o) => o.class === 'pedestrian').length;
-  const totalPedestrians = metrics?.totalPedestriansDetected ?? activePedestrians;
-  const trucksCount = objects.filter((o) => o.class === 'truck').length;
-  const cyclistsCount = objects.filter((o) => o.class === 'cyclist' || o.class === 'motorcycle').length;
   const hazardsTackled = metrics?.hazardEventsTackled ?? 0;
   const pathDev = metrics?.pathDeviation;
   const sensorOrchestration = metrics?.sensorOrchestration;
@@ -257,61 +241,6 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
         </div>
       </div>
 
-      {/* 3. Identified Object Classes Breakdown */}
-      <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2.5 shadow-lg">
-        <div className="flex items-center justify-between border-b border-[#1A2638] pb-2">
-          <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-mono font-bold tracking-wider text-slate-200 uppercase">
-              PERCEPTION TARGETS
-            </span>
-          </div>
-          <span className="text-xs font-mono text-cyan-400 font-bold">
-            {objects.length} TOTAL
-          </span>
-        </div>
-
-        {/* Objects Category Grid */}
-        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Car className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Vehicles</span>
-            </div>
-            <span className="font-bold text-slate-100">{carsCount}</span>
-          </div>
-
-          <div className={`flex items-center justify-between p-2 rounded border transition-all ${
-            activePedestrians > 0 
-              ? 'bg-rose-950/40 border-rose-500/50 text-rose-300 shadow-[0_0_10px_rgba(255,42,109,0.2)] animate-pulse' 
-              : 'bg-[#050A14] border-[#141E2F]'
-          }`}>
-            <div className="flex items-center gap-1.5">
-              <Users className={`w-3.5 h-3.5 ${activePedestrians > 0 ? 'text-rose-400' : 'text-amber-400'}`} />
-              <span>Pedestrians</span>
-            </div>
-            <span className="font-bold">
-              {activePedestrians} <span className="text-[10px] text-slate-400 font-normal">({totalPedestrians})</span>
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-              <span>Hazards</span>
-            </div>
-            <span className="font-bold text-amber-400">{hazardsTackled}</span>
-          </div>
-
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Truck className="w-3.5 h-3.5 text-blue-400" />
-              <span>Trucks</span>
-            </div>
-            <span className="font-bold text-slate-100">{trucksCount}</span>
-          </div>
-        </div>
-      </div>
 
       {/* 4. Path Deviation & Journey Analytics Card */}
       <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2.5 shadow-lg text-xs font-mono">

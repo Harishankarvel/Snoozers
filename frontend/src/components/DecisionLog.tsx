@@ -19,6 +19,8 @@ import { audioManager } from '../utils/audioAlerts';
 
 interface DecisionLogProps {
   latestTelemetry: TelemetryPacket | null;
+  isFullTab?: boolean;
+  className?: string;
 }
 
 interface LogEntry {
@@ -33,7 +35,11 @@ interface LogEntry {
   rawTelemetry?: any;
 }
 
-export const DecisionLog: React.FC<DecisionLogProps> = ({ latestTelemetry }) => {
+export const DecisionLog: React.FC<DecisionLogProps> = ({ 
+  latestTelemetry,
+  isFullTab = false,
+  className = ''
+}) => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterAction, setFilterAction] = useState<string>('ALL');
@@ -144,7 +150,9 @@ export const DecisionLog: React.FC<DecisionLogProps> = ({ latestTelemetry }) => 
   });
 
   return (
-    <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] flex flex-col shadow-lg overflow-hidden h-[340px]">
+    <section className={`bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] flex flex-col shadow-lg overflow-hidden ${
+      isFullTab ? 'h-[540px] lg:h-[calc(100vh-340px)] min-h-[460px]' : 'h-[340px]'
+    } ${className}`}>
       {/* Terminal Titlebar & Header */}
       <div className="bg-[#0A101D] px-4 py-2.5 border-b border-[#1A2638] flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">

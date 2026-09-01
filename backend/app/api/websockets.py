@@ -166,6 +166,27 @@ def orchestrate_sensors(has_ped: bool, has_cutin: bool, has_sudden_brake: bool, 
     return sensors, rationale
 
 
+def compute_screen_projection(x_meters: float, z_meters: float, horizon: int = 331, screen_w: int = 1280, screen_h: int = 720):
+    """
+    Unified 3D-to-2D Perspective Camera Projection:
+    Aligns lateral real-world lane offsets exactly onto the 3-lane perspective roadway:
+      - x = -3.5m -> Left Lane Center
+      - x =  0.0m -> Center (Ego) Lane Center
+      - x = +3.5m -> Right Lane Center
+    """
+    cx = screen_w // 2
+    z_clamped = max(1.0, min(100.0, z_meters))
+    y_norm = max(0.0, min(1.0, (1.0 - z_clamped / 100.0) ** 1.8))
+    vy = int(horizon + (screen_h - horizon) * y_norm)
+    sp = (vy - horizon) / max(1, screen_h - horizon)
+    
+    # 3-Lane Road Alignment
+    lane_factor = x_meters / 3.5
+    vx = int(cx + lane_factor * (62.1 + 553.8 * sp))
+    scale = max(0.12, min(1.3, 28.0 / (z_clamped + 5.0)))
+    return vx, vy, scale, sp
+
+
 def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: float, manager_ref: ConnectionManager) -> bytes:
     """
     Generates a 1280x720 synthetic camera frame with animated multiple traffic vehicles,
@@ -222,13 +243,11 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
             x2 = int(cx + (lane_x * 90) + lane_x * 520 * spread2)
             draw.line([(x1, y1), (x2, y2)], fill=(250, 204, 21), width=3)
 
-    # 3. Pothole / Surface Hazard on Road (Ahead of ego car)
+    # 3. Pothole / Surface Hazard on Road (Ahead of ego car in center lane)
     if 'pothole_hazard' in faults:
         pothole_z = 14.0
-        p_scale = max(0.12, min(1.2, 28.0 / (pothole_z + 5.0)))
-        py = int(horizon + (height - horizon) * ((1.0 - pothole_z / 100.0) ** 1.8))
-        pspread = (py - horizon) / max(1, height - horizon)
-        px = int(cx + (0.2 * 140 * pspread * 2.2))
+        pothole_x = 0.3
+        px, py, p_scale, _ = compute_screen_projection(pothole_x, pothole_z, horizon, width, height)
         
         pw = int(60 * p_scale)
         ph = int(24 * p_scale)
@@ -242,9 +261,8 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
     # 4. Multi-Vehicle Traffic Simulation
     # A. Lead Vehicle in Center Lane (#101)
     lead_z = 38.0
-    scale1 = max(0.12, min(1.2, 28.0 / (lead_z + 5.0)))
-    vy1 = int(horizon + (height - horizon) * ((1.0 - lead_z / 100.0) ** 1.8))
-    vx1 = cx + int(math.sin(frame_idx * 0.04) * 12)
+    lead_x = math.sin(frame_idx * 0.04) * 0.35
+    vx1, vy1, scale1, _ = compute_screen_projection(lead_x, lead_z, horizon, width, height)
     vw1 = int(90 * scale1)
     vh1 = int(60 * scale1)
     draw.rectangle([vx1 - vw1 // 2, vy1 - vh1, vx1 + vw1 // 2, vy1], fill=(0, 200, 255))
@@ -252,12 +270,10 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
     draw.rectangle([vx1 - vw1 // 2 + 2, vy1 - int(vh1 * 0.4), vx1 - int(vw1 * 0.25), vy1 - int(vh1 * 0.15)], fill=(255, 0, 40))
     draw.rectangle([vx1 + int(vw1 * 0.25), vy1 - int(vh1 * 0.4), vx1 + vw1 // 2 - 2, vy1 - int(vh1 * 0.15)], fill=(255, 0, 40))
 
-    # B. Semi-Truck in Right Lane (#102)
+    # B. Semi-Truck in Right Lane (#102 - aligned in center of right lane at x=+3.5m)
     truck_z = 44.0
-    scale2 = max(0.12, min(1.2, 28.0 / (truck_z + 5.0)))
-    vy2 = int(horizon + (height - horizon) * ((1.0 - truck_z / 100.0) ** 1.8))
-    sp2 = (vy2 - horizon) / max(1, height - horizon)
-    vx2 = int(cx + (3.6 * 140 * sp2 * 2.2))
+    truck_x = 3.5
+    vx2, vy2, scale2, _ = compute_screen_projection(truck_x, truck_z, horizon, width, height)
     vw2 = int(115 * scale2)
     vh2 = int(95 * scale2)
     # Truck Cargo Body & Cab
@@ -266,27 +282,23 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
     draw.rectangle([vx2 - vw2 // 2 + 2, vy2 - int(vh2 * 0.25), vx2 - int(vw2 * 0.3), vy2 - int(vh2 * 0.1)], fill=(255, 120, 0))
     draw.rectangle([vx2 + int(vw2 * 0.3), vy2 - int(vh2 * 0.25), vx2 + vw2 // 2 - 2, vy2 - int(vh2 * 0.1)], fill=(255, 120, 0))
 
-    # C. Adjacent / Cutting-In Sedan in Left Lane (#103)
+    # C. Adjacent / Cutting-In Sedan in Left Lane (#103 - aligned in center of left lane at x=-3.5m)
     has_cutin = 'cut_in_vehicle' in faults
     if has_cutin:
         fault_data = faults['cut_in_vehicle']
         elapsed = now - fault_data['time']
         dur = max(1.0, fault_data['duration'])
         alpha_cut = min(1.0, elapsed / dur)
-        # Animate Car #103 aggressively sliding from left lane (x = -3.5m) into ego lane (x = 0.2m)
-        # and closing in towards ego car (z drops from 26m down to 10.5m right in front!)
-        cut_x = -3.5 + (alpha_cut * 3.7)
-        cut_z = max(10.5, 26.0 - (alpha_cut * 15.5))
+        # Animate Car #103 smoothly sliding from left lane (x = -3.5m) into center ego lane (x = 0.0m)
+        cut_x = -3.5 + (alpha_cut * 3.5)
+        cut_z = max(10.5, 24.0 - (alpha_cut * 13.5))
         car_cut_col = (255, 42, 109)
     else:
         cut_x = -3.5
         cut_z = 24.0
         car_cut_col = (50, 180, 220)
 
-    scale3 = max(0.12, min(1.3, 28.0 / (cut_z + 5.0)))
-    vy3 = int(horizon + (height - horizon) * ((1.0 - cut_z / 100.0) ** 1.8))
-    sp3 = (vy3 - horizon) / max(1, height - horizon)
-    vx3 = int(cx + (cut_x * 140 * sp3 * 2.2))
+    vx3, vy3, scale3, _ = compute_screen_projection(cut_x, cut_z, horizon, width, height)
     vw3 = int(90 * scale3)
     vh3 = int(60 * scale3)
     draw.rectangle([vx3 - vw3 // 2, vy3 - vh3, vx3 + vw3 // 2, vy3], fill=car_cut_col)
@@ -296,21 +308,18 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
     draw.rectangle([vx3 - vw3 // 2 + 2, vy3 - int(vh3 * 0.45), vx3 - int(vw3 * 0.25), vy3 - int(vh3 * 0.2)], fill=tail_col)
     draw.rectangle([vx3 + int(vw3 * 0.25), vy3 - int(vh3 * 0.45), vx3 + vw3 // 2 - 2, vy3 - int(vh3 * 0.2)], fill=tail_col)
 
-    # 5. Animated Jaywalking Pedestrian (Crossing cleanly IN FRONT of car at z = 16.0m)
+    # 5. Animated Jaywalking Pedestrian (Crossing cleanly across corridor at z = 16.0m)
     if 'pedestrian_jaywalking' in faults:
         fault_data = faults['pedestrian_jaywalking']
         elapsed = now - fault_data['time']
         dur = max(1.0, fault_data['duration'])
         alpha = min(1.0, elapsed / dur)
 
-        # Pedestrian crosses in front of ego car at constant z=16m from x=-3.5m (left sidewalk) to x=+2.8m (right)
-        ped_x = -3.5 + (alpha * 6.3)
-        ped_z = 16.0  # Fixed in front of ego vehicle, high visibility above hood!
+        # Pedestrian crosses in front of ego car at constant z=16m from x=-4.5m (left sidewalk) to x=+4.5m (right)
+        ped_x = -4.5 + (alpha * 9.0)
+        ped_z = 16.0
 
-        ped_scale = max(0.15, min(1.4, 28.0 / (ped_z + 5.0)))
-        ped_y = int(horizon + (height - horizon) * ((1.0 - ped_z / 100.0) ** 1.8))
-        ped_spread = (ped_y - horizon) / max(1, height - horizon)
-        ped_scr_x = int(cx + (ped_x * 140 * ped_spread * 2.2))
+        ped_scr_x, ped_y, ped_scale, _ = compute_screen_projection(ped_x, ped_z, horizon, width, height)
 
         pw = int(28 * ped_scale)
         ph = int(68 * ped_scale)
@@ -508,35 +517,36 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
 
                 # A. Lead Vehicle in Center Lane (#101)
                 lead_z = 38.0
+                lead_x = math.sin(manager.frame_count * 0.04) * 0.35
                 objects_3d.append({
                     "id": 101,
                     "class": "car",
-                    "x": 0.0,
+                    "x": round(lead_x, 2),
                     "y": 0.0,
                     "z": lead_z,
                     "relative_velocity": 0.5,
                     "is_converging": False
                 })
 
-                # B. Commercial Semi-Truck in Right Lane (#102)
+                # B. Commercial Semi-Truck in Right Lane (#102 - aligned in center of right lane at x=+3.5m)
                 objects_3d.append({
                     "id": 102,
                     "class": "truck",
-                    "x": 3.6,
+                    "x": 3.5,
                     "y": 0.0,
                     "z": 44.0,
                     "relative_velocity": -2.0,
                     "is_converging": False
                 })
 
-                # C. Adjacent / Cut-In Sedan in Left Lane (#103)
+                # C. Adjacent / Cut-In Sedan in Left Lane (#103 - aligned in center of left lane at x=-3.5m)
                 if has_cutin:
                     fault_info = manager.active_faults["cut_in_vehicle"]
                     elapsed = now - fault_info["time"]
                     dur = max(1.0, fault_info["duration"])
                     alpha_cut = min(1.0, elapsed / dur)
-                    cut_x = -3.5 + (alpha_cut * 3.7)
-                    cut_z = max(10.5, 26.0 - (alpha_cut * 15.5))
+                    cut_x = -3.5 + (alpha_cut * 3.5)
+                    cut_z = max(10.5, 24.0 - (alpha_cut * 13.5))
                     cut_rel_vel = 12.0
                 else:
                     cut_x = -3.5
@@ -558,7 +568,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     objects_3d.append({
                         "id": 501,
                         "class": "obstacle",
-                        "x": 0.2,
+                        "x": 0.3,
                         "y": 0.0,
                         "z": 14.0,
                         "relative_velocity": round(manager.ego_speed * 1000 / 3600, 1),
@@ -574,8 +584,8 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     dur = max(1.0, fault_info["duration"])
                     alpha = min(1.0, elapsed / dur)
 
-                    # Dynamic crossing: starts at x=-3.5 (left curb), crosses directly across ego lane in front of car
-                    ped_x = -3.5 + (alpha * 6.3)
+                    # Dynamic crossing: starts at x=-4.5 (left curb), crosses smoothly to x=+4.5 (right)
+                    ped_x = -4.5 + (alpha * 9.0)
                     ped_z = 16.0
                     ped_rel_vel = 10.5
                     
@@ -723,16 +733,13 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                         min_ttc = ttc
                         most_crit = obj
 
-                    # Screen projection coordinates
-                    scale = max(0.1, min(1.3, 28.0 / (obj["z"] + 5.0)))
-                    horizon_y = 330
-                    y_scr = int(horizon_y + (720 - horizon_y) * ((1.0 - obj["z"] / 100.0) ** 1.8))
-                    spread = (y_scr - horizon_y) / max(1, 720 - horizon_y)
-                    x_scr = int(640 + (obj["x"] * 140 * spread * 2.2))
+                    # Screen projection coordinates matching synthetic video stream
+                    x_scr, y_scr, scale, _ = compute_screen_projection(obj["x"], obj["z"], 331, 1280, 720)
                     
                     is_ped_obj = obj["class"] == "pedestrian"
-                    bw = int((35 if is_ped_obj else 90) * scale)
-                    bh = int((75 if is_ped_obj else 60) * scale)
+                    is_truck_obj = obj["class"] == "truck"
+                    bw = int((35 if is_ped_obj else (115 if is_truck_obj else 90)) * scale)
+                    bh = int((75 if is_ped_obj else (95 if is_truck_obj else 60)) * scale)
 
                     risk = "CRITICAL" if ttc < 2.5 or (is_ped_obj and abs(obj["x"]) < 1.5) else "CAUTION" if ttc < 4.5 else "SAFE"
 

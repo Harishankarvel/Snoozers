@@ -432,7 +432,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="relative flex-1 bg-[#05080E] rounded-xl border border-[#1A2638] overflow-hidden flex flex-col shadow-[0_0_25px_rgba(0,0,0,0.7)]"
+      className="relative w-full bg-[#05080E] rounded-xl border border-[#1A2638] overflow-hidden flex flex-col shadow-[0_0_25px_rgba(0,0,0,0.7)]"
     >
       {/* Video Canvas Container (16:9 Aspect Ratio) */}
       <div className="relative w-full aspect-video bg-black overflow-hidden flex items-center justify-center">
