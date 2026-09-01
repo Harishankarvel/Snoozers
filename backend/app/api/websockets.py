@@ -30,6 +30,12 @@ class ConnectionManager:
         self.steering_angle = 0.0
         self.brake_pressure = 0
         self.throttle = 45
+        
+        # New Telemetry metrics
+        self.total_distance_travelled = 0.0
+        self.hazard_events_tackled = 0
+        self.path_deviation = 0.0
+        self.last_inference_latency = 0.0
 
     async def connect_telemetry(self, websocket: WebSocket):
         await websocket.accept()
@@ -241,8 +247,20 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                 if has_ped:
                     objects_3d.append({"id": 777, "class": "pedestrian", "x": -0.8, "y": 0.0, "z": 18.0})
 
-                # Run Decision Engine
-                action, reasoning = manager.decision_engine.evaluate_maneuvers(objects_3d)
+                # Update distance travelled based on speed (km/h -> m/s) and time delta (0.05s)
+                self.total_distance_travelled += (manager.ego_speed * 1000 / 3600) * 0.05
+                # Update path deviation (simple accumulation of steering angle over time)
+                self.path_deviation += abs(math.sin(manager.frame_count * 0.03) * 1.5) * 0.05
+
+                # Run ML Decision Engine
+                result = manager.decision_engine.evaluate_hazard_event_ml(objects_3d, ego_speed=manager.ego_speed)
+                action = result["action"]
+                reasoning = result["hypotheses_reasoning"]
+                manager.last_inference_latency = result.get("latency_ms", 0.0)
+                
+                # Check if we tackled a hazard
+                if action != "Maintain Course" and not has_emergency:
+                    manager.hazard_events_tackled += 1
 
                 if has_emergency:
                     action = "Emergency Braking"
@@ -254,6 +272,8 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     manager.brake_pressure = 95
                 elif action.startswith("Brake"):
                     manager.brake_pressure = 45
+                elif action.startswith("Slow"):
+                    manager.brake_pressure = 15
                 else:
                     manager.brake_pressure = 0
 
@@ -328,7 +348,11 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                             "radar": "HEALTHY",
                             "imu": "HEALTHY",
                             "gnss": "HEALTHY"
-                        }
+                        },
+                        "totalDistanceTravelledMeters": round(self.total_distance_travelled, 2),
+                        "hazardEventsTackled": self.hazard_events_tackled,
+                        "pathDeviationTotal": round(self.path_deviation, 2),
+                        "inferenceLatencyMs": round(manager.last_inference_latency, 2)
                     },
                     "ttcAlert": {
                         "level": "CRITICAL" if min_ttc < 2.5 else "CAUTION" if min_ttc < 4.5 else "SAFE",

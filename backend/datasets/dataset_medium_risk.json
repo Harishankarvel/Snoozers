@@ -1,0 +1,66 @@
+{
+  "scenario_name": "Converging Traffic in Caution Window (Medium Risk)",
+  "risk_category": "MEDIUM",
+  "expected_action": "Slow & Prepare to Yield",
+  "description": "Adjacent vehicle signals and begins converging inward with decreasing TTC in caution threshold (3.0s - 4.2s).",
+  "events": [
+    {
+      "timestamp_offset_sec": 0.0,
+      "ego_speed_kmh": 60.0,
+      "tracked_objects": [
+        {
+          "id": 201,
+          "class": "car",
+          "x": 2.2,
+          "y": 0.0,
+          "z": 28.0,
+          "relative_velocity": 7.5,
+          "is_converging": true,
+          "bbox": [720, 280, 840, 370]
+        }
+      ]
+    },
+    {
+      "timestamp_offset_sec": 0.5,
+      "ego_speed_kmh": 58.0,
+      "tracked_objects": [
+        {
+          "id": 201,
+          "class": "car",
+          "x": 1.6,
+          "y": 0.0,
+          "z": 24.0,
+          "relative_velocity": 7.0,
+          "is_converging": true,
+          "bbox": [680, 290, 810, 385]
+        }
+      ]
+    },
+    {
+      "timestamp_offset_sec": 1.0,
+      "ego_speed_kmh": 52.0,
+      "tracked_objects": [
+        {
+          "id": 201,
+          "class": "car",
+          "x": 1.2,
+          "y": 0.0,
+          "z": 21.0,
+          "relative_velocity": 6.0,
+          "is_converging": true,
+          "bbox": [650, 300, 790, 400]
+        },
+        {
+          "id": 205,
+          "class": "cyclist",
+          "x": 3.0,
+          "y": 0.0,
+          "z": 18.0,
+          "relative_velocity": 4.0,
+          "is_converging": false,
+          "bbox": [860, 310, 920, 410]
+        }
+      ]
+    }
+  ]
+}

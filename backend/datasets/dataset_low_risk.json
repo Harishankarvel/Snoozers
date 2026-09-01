@@ -1,0 +1,66 @@
+{
+  "scenario_name": "Nominal Highway Cruising (Low Risk)",
+  "risk_category": "LOW",
+  "expected_action": "Maintain Course",
+  "description": "Vehicle driving at nominal speed with safe distance ahead and vehicles staying in their own lanes.",
+  "events": [
+    {
+      "timestamp_offset_sec": 0.0,
+      "ego_speed_kmh": 65.0,
+      "tracked_objects": [
+        {
+          "id": 101,
+          "class": "car",
+          "x": 0.0,
+          "y": 0.0,
+          "z": 52.0,
+          "relative_velocity": 4.5,
+          "is_converging": false,
+          "bbox": [580, 260, 700, 340]
+        },
+        {
+          "id": 102,
+          "class": "car",
+          "x": 3.8,
+          "y": 0.0,
+          "z": 38.0,
+          "relative_velocity": 1.2,
+          "is_converging": false,
+          "bbox": [820, 270, 930, 350]
+        }
+      ]
+    },
+    {
+      "timestamp_offset_sec": 0.5,
+      "ego_speed_kmh": 65.0,
+      "tracked_objects": [
+        {
+          "id": 101,
+          "class": "car",
+          "x": 0.0,
+          "y": 0.0,
+          "z": 50.0,
+          "relative_velocity": 4.0,
+          "is_converging": false,
+          "bbox": [578, 258, 702, 342]
+        }
+      ]
+    },
+    {
+      "timestamp_offset_sec": 1.0,
+      "ego_speed_kmh": 64.8,
+      "tracked_objects": [
+        {
+          "id": 101,
+          "class": "car",
+          "x": 0.0,
+          "y": 0.0,
+          "z": 48.0,
+          "relative_velocity": 3.5,
+          "is_converging": false,
+          "bbox": [575, 255, 705, 345]
+        }
+      ]
+    }
+  ]
+}
