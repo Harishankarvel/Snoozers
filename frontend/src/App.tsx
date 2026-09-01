@@ -6,6 +6,7 @@ import { SensorConfidencePanel } from './components/SensorConfidencePanel';
 import { DecisionLog } from './components/DecisionLog';
 import { ControlPanel } from './components/ControlPanel';
 import { ArbiterDecisionTab } from './components/ArbiterDecisionTab';
+import { SensorMatrixTab } from './components/SensorMatrixTab';
 import { EndJourneyModal } from './components/EndJourneyModal';
 import { 
   FaultInjectionPayload, 
@@ -16,8 +17,8 @@ import { avWebSocketService } from './services/websocketService';
 import { mockSimulationEngine } from './services/mockSimulation';
 
 export const App: React.FC = () => {
-  // Navigation Tab State: 'mission' (Live HUD) vs 'arbiter' (Autonomous Decision & Arbiter Log)
-  const [activeTab, setActiveTab] = useState<'mission' | 'arbiter'>('mission');
+  // Navigation Tab State: 'mission' (Page 1: Live HUD), 'arbiter' (Page 2: Decision Log), 'matrix' (Page 3: Sensor Matrix & Gating)
+  const [activeTab, setActiveTab] = useState<'mission' | 'arbiter' | 'matrix'>('mission');
 
   // Mode toggle: Default to false (Live Backend Mode ws://localhost:8000)
   const [isMockMode, setIsMockMode] = useState(false);
@@ -140,7 +141,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#05070B] text-slate-100 flex flex-col antialiased font-sans select-none">
-      {/* Top Fixed Header with Tab Navigation */}
+      {/* Top Fixed Header with 3-Page Tab Navigation */}
       <Header
         videoMetrics={videoMetrics}
         telemetryMetrics={telemetryMetrics}
@@ -154,26 +155,20 @@ export const App: React.FC = () => {
 
       {/* Main Tabbed Application View */}
       <main className="flex-1 p-3 sm:p-4 max-w-[1920px] w-full mx-auto flex flex-col gap-3 sm:gap-4">
-        {activeTab === 'mission' ? (
-          /* TAB 1: Live Mission HUD & Controls */
-          <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-start">
-            {/* Left Column: Front Aperture Video Feed + Edge Cases directly beneath */}
+        {/* PAGE 1: LIVE MISSION HUD */}
+        {activeTab === 'mission' && (
+          <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-start animate-in fade-in duration-200">
             <div className="flex-1 flex flex-col gap-3 sm:gap-4 min-w-0 w-full">
-              {/* Central Live Video & Perception HUD Feed */}
               <MainVideoFeed
                 latestTelemetryRef={latestTelemetryRef}
                 latestFrameBlobRef={latestFrameBlobRef}
                 isMockMode={isMockMode}
               />
-
-              {/* Edge-Case & Fault Injection Controls directly beneath Front Aperture */}
               <ControlPanel
                 onInjectFault={handleInjectFault}
                 activeFaults={activeFaults}
               />
             </div>
-
-            {/* Right Column: Cleaned Real-Time Telemetry & Dynamics Sidebar */}
             <div className="w-full lg:w-[380px] xl:w-[420px] 2xl:w-[460px] flex-shrink-0 flex flex-col gap-3 sm:gap-4">
               <TelemetrySidebar 
                 telemetry={currentTelemetry}
@@ -182,16 +177,24 @@ export const App: React.FC = () => {
               />
             </div>
           </div>
-        ) : (
-          /* TAB 2: Dedicated Autonomous Decision Stream & Arbiter Log */
+        )}
+
+        {/* PAGE 2: DEDICATED ARBITER DECISION STREAM & EXPLAINABILITY LOG */}
+        {activeTab === 'arbiter' && (
           <ArbiterDecisionTab
             latestTelemetry={currentTelemetry}
             activeFaults={activeFaults}
           />
         )}
 
-        {/* Global Sensor Confidence Evolution & Temporal Arbitration Matrix */}
-        <SensorConfidencePanel confidenceData={currentTelemetry?.sensorConfidence} />
+        {/* PAGE 3: SENSOR CONFIDENCE MATRIX & DYNAMIC SENSOR GATING */}
+        {activeTab === 'matrix' && (
+          <SensorMatrixTab
+            latestTelemetry={currentTelemetry}
+            onInjectFault={handleInjectFault}
+            activeFaults={activeFaults}
+          />
+        )}
       </main>
 
       {/* End of Journey Summary Modal */}

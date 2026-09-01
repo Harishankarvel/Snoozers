@@ -27,8 +27,8 @@ interface HeaderProps {
   onToggleMockMode: () => void;
   onEmergencyStop: () => void;
   activeFaultsCount: number;
-  activeTab: 'mission' | 'arbiter';
-  onTabChange: (tab: 'mission' | 'arbiter') => void;
+  activeTab: 'mission' | 'arbiter' | 'matrix';
+  onTabChange: (tab: 'mission' | 'arbiter' | 'matrix') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -146,8 +146,9 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Center Navigation Tab Selector */}
+      {/* Center Navigation Tab Selector (3 Pages) */}
       <div className="flex items-center gap-1 bg-[#0A101D] p-1 rounded-xl border border-[#1A2638] shadow-inner">
+        {/* Tab 1: Live Mission HUD */}
         <button
           id="tab-mission-hud"
           onClick={() => {
@@ -161,9 +162,10 @@ export const Header: React.FC<HeaderProps> = ({
           }`}
         >
           <LayoutDashboard className="w-3.5 h-3.5" />
-          <span>LIVE MISSION HUD</span>
+          <span>[1] LIVE MISSION HUD</span>
         </button>
 
+        {/* Tab 2: Arbiter & Decision Log */}
         <button
           id="tab-arbiter-log"
           onClick={() => {
@@ -177,7 +179,24 @@ export const Header: React.FC<HeaderProps> = ({
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
-          <span>ARBITER & DECISION LOG</span>
+          <span>[2] ARBITER &amp; LOG</span>
+        </button>
+
+        {/* Tab 3: Sensor Matrix & Gating */}
+        <button
+          id="tab-sensor-matrix"
+          onClick={() => {
+            audioManager.playClick();
+            onTabChange('matrix');
+          }}
+          className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+            activeTab === 'matrix'
+              ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/20 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0E1726] border border-transparent'
+          }`}
+        >
+          <Activity className="w-3.5 h-3.5" />
+          <span>[3] SENSOR MATRIX &amp; GATING</span>
         </button>
       </div>
 

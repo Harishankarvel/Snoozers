@@ -728,6 +728,7 @@
     function App() {
       // Default to LIVE BACKEND mode as requested
       const [isMockMode, setIsMockMode] = useState(false);
+      const [activeTab, setActiveTab] = useState('mission'); // 'mission' | 'arbiter' | 'matrix'
       const [telemetry, setTelemetry] = useState(null);
       const [activeFaults, setActiveFaults] = useState([]);
       const [isMuted, setIsMuted] = useState(false);
@@ -1001,6 +1002,43 @@
               </div>
             </div>
 
+            {/* 3-Page Navigation Tabs */}
+            <div className="flex items-center gap-1 bg-[#0A101D] p-1 rounded-xl border border-[#1A2638] shadow-inner">
+              <button
+                id="tab-mission-hud"
+                onClick={() => setActiveTab('mission')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeTab === 'mission'
+                    ? 'bg-gradient-to-r from-cyan-500/20 to-blue-600/20 text-cyan-300 border border-cyan-500/50 shadow-[0_0_12px_rgba(0,240,255,0.25)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#0E1726] border border-transparent'
+                }`}
+              >
+                <span>[1] LIVE MISSION HUD</span>
+              </button>
+              <button
+                id="tab-arbiter-log"
+                onClick={() => setActiveTab('arbiter')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeTab === 'arbiter'
+                    ? 'bg-gradient-to-r from-purple-500/20 to-indigo-600/20 text-purple-300 border border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#0E1726] border border-transparent'
+                }`}
+              >
+                <span>[2] ARBITER &amp; LOG</span>
+              </button>
+              <button
+                id="tab-sensor-matrix"
+                onClick={() => setActiveTab('matrix')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeTab === 'matrix'
+                    ? 'bg-gradient-to-r from-emerald-500/20 to-teal-600/20 text-emerald-300 border border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.25)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-[#0E1726] border border-transparent'
+                }`}
+              >
+                <span>[3] SENSOR MATRIX &amp; GATING</span>
+              </button>
+            </div>
+
             {/* Mission Stats Badges */}
             <div className="flex items-center gap-3 bg-[#0B1220] px-3 py-1.5 rounded-lg border border-[#1E2D45] text-xs font-mono">
               <div className="flex items-center gap-1.5 pr-3 border-r border-[#1E2D45]">
@@ -1016,7 +1054,7 @@
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-slate-400">WS STATUS:</span>
+                <span className="text-slate-400">WS:</span>
                 <span className={`px-1.5 py-0.2 rounded text-[10px] ${telWsStatus.status === 'CONNECTED' ? 'bg-emerald-500/20 text-emerald-300 font-bold' : 'bg-rose-500/20 text-rose-300'}`}>
                   {telWsStatus.status}
                 </span>
@@ -1029,7 +1067,7 @@
                 onClick={() => setIsMockMode(!isMockMode)}
                 className={`px-3 py-1.5 rounded text-xs font-mono font-medium border ${isMockMode ? 'bg-purple-600/20 text-purple-300 border-purple-500/40' : 'bg-cyan-950/40 text-cyan-300 border-cyan-500/40 font-bold'}`}
               >
-                {isMockMode ? '✨ SIMULATOR MODE' : '🔗 LIVE BACKEND'}
+                {isMockMode ? '✨ SIMULATOR' : '🔗 LIVE BACKEND'}
               </button>
               <button
                 onClick={() => {
@@ -1043,291 +1081,284 @@
             </div>
           </header>
 
-          {/* Main Content Grid */}
+          {/* Main Content Grid with 3 Tabs */}
           <main className="flex-1 p-3 sm:p-4 max-w-[1920px] w-full mx-auto flex flex-col gap-4">
-            {/* Top Row: Video Feed Canvas + Telemetry Sidebar */}
-            <div className="flex flex-col lg:flex-row gap-4 items-stretch">
-              {/* Central Video & Overlay Canvas */}
-              <div className="relative flex-1 bg-[#05080E] rounded-xl border border-[#1A2638] overflow-hidden flex flex-col shadow-2xl">
-                <div className="relative w-full aspect-video bg-black overflow-hidden flex items-center justify-center">
-                  <canvas ref={videoCanvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full object-contain" />
-                  <canvas ref={overlayCanvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
-                  
-                  <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded bg-[#070D18]/80 backdrop-blur-md border border-[#1E2D45] text-xs font-mono">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-                    <span className="text-slate-300">FRONT CAMERA 120° [1280x720]</span>
+            {/* PAGE 1: LIVE MISSION HUD */}
+            {activeTab === 'mission' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col lg:flex-row gap-4 items-stretch">
+                  {/* Central Video & Overlay Canvas */}
+                  <div className="relative flex-1 bg-[#05080E] rounded-xl border border-[#1A2638] overflow-hidden flex flex-col shadow-2xl">
+                    <div className="relative w-full aspect-video bg-black overflow-hidden flex items-center justify-center">
+                      <canvas ref={videoCanvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full object-contain" />
+                      <canvas ref={overlayCanvasRef} width={1280} height={720} className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+                      
+                      <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded bg-[#070D18]/80 backdrop-blur-md border border-[#1E2D45] text-xs font-mono">
+                        <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                        <span className="text-slate-300">FRONT CAMERA 120° [1280x720]</span>
+                      </div>
+
+                      <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
+                        {activePeds > 0 && (
+                          <div className="flex items-center gap-2 px-3 py-1 rounded bg-rose-950/80 backdrop-blur-md border border-rose-500/60 text-xs font-mono text-rose-300 animate-pulse shadow-lg">
+                            <span>⚠️ JAYWALKING PEDESTRIAN CROSSING ACTIVE</span>
+                          </div>
+                        )}
+                        {telemetry?.activeFaults?.includes('weather_degradation') && (
+                          <div className="flex items-center gap-2 px-3 py-1 rounded bg-blue-950/80 backdrop-blur-md border border-blue-400/60 text-xs font-mono text-blue-200 shadow-lg">
+                            <span>🌧️ ADVERSE WEATHER DEGRADATION [RAIN/FOG] - SPEED RESTRICTED</span>
+                          </div>
+                        )}
+                        {telemetry?.activeFaults?.includes('sensor_blindspot') && (
+                          <div className="flex items-center gap-2 px-3 py-1 rounded bg-red-950/80 backdrop-blur-md border border-red-500/60 text-xs font-mono text-red-200 animate-pulse shadow-lg">
+                            <span>🚫 SENSOR BLINDSPOT OCCLUDED - BRAKE APPLIED</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">
-                    {activePeds > 0 && (
-                      <div className="flex items-center gap-2 px-3 py-1 rounded bg-rose-950/80 backdrop-blur-md border border-rose-500/60 text-xs font-mono text-rose-300 animate-pulse shadow-lg">
-                        <span>⚠️ JAYWALKING PEDESTRIAN CROSSING ACTIVE</span>
+                  {/* Telemetry Sidebar */}
+                  <aside className="w-full lg:w-80 flex flex-col gap-3">
+                    {/* Speedometer Card */}
+                    <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2 shadow-lg">
+                      <div className="flex justify-between items-center border-b border-[#1A2638] pb-2 text-xs font-mono">
+                        <span className="text-cyan-400 font-bold">VEHICLE SPEED</span>
+                        <span className="text-emerald-400 font-bold">{telemetry?.metrics?.driveMode || 'AUTONOMOUS'}</span>
                       </div>
-                    )}
-                    {telemetry?.activeFaults?.includes('weather_degradation') && (
-                      <div className="flex items-center gap-2 px-3 py-1 rounded bg-blue-950/80 backdrop-blur-md border border-blue-400/60 text-xs font-mono text-blue-200 shadow-lg">
-                        <span>🌧️ ADVERSE WEATHER DEGRADATION [RAIN/FOG] - SPEED RESTRICTED</span>
+                      <div className="flex items-baseline justify-center py-2 gap-2">
+                        <span className="text-5xl font-bold font-mono text-slate-100">{speed.toFixed(0)}</span>
+                        <span className="text-sm font-mono text-cyan-400">KM/H</span>
                       </div>
-                    )}
-                    {telemetry?.activeFaults?.includes('sensor_blindspot') && (
-                      <div className="flex items-center gap-2 px-3 py-1 rounded bg-red-950/80 backdrop-blur-md border border-red-500/60 text-xs font-mono text-red-200 animate-pulse shadow-lg">
-                        <span>🚫 SENSOR BLINDSPOT OCCLUDED - BRAKE APPLIED</span>
+                      <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-2 border-t border-[#131F33]">
+                        <div className="text-slate-400">STEERING: <span className="text-slate-200 font-bold">{telemetry?.metrics?.steeringAngleDeg}°</span></div>
+                        <div className="text-slate-400">BRAKE: <span className="text-rose-400 font-bold">{telemetry?.metrics?.brakePressurePct}%</span></div>
                       </div>
-                    )}
-                    {telemetry?.activeFaults?.includes('cut_in_vehicle') && (
-                      <div className="flex items-center gap-2 px-3 py-1 rounded bg-amber-950/80 backdrop-blur-md border border-amber-500/60 text-xs font-mono text-amber-200 shadow-lg">
-                        <span>🏎️ LEAD VEHICLE CUT-IN DETECTED</span>
-                      </div>
-                    )}
-                  </div>
+                    </div>
 
+                    {/* TTC Alert Card */}
+                    <div className={`rounded-xl border p-4 flex flex-col gap-2 transition-all ${ttcLevel === 'CRITICAL' ? 'bg-rose-950/40 border-rose-500 animate-pulse' : ttcLevel === 'CAUTION' ? 'bg-amber-950/30 border-amber-500' : 'bg-[#080D17]/90 border-[#1A2638]'}`}>
+                      <div className="flex justify-between items-center text-xs font-mono font-bold">
+                        <span className="text-slate-200">TTC COLLISION RADAR</span>
+                        <span className={`px-2 py-0.5 rounded ${ttcLevel === 'CRITICAL' ? 'bg-rose-500 text-white' : ttcLevel === 'CAUTION' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                          {ttcLevel}
+                        </span>
+                      </div>
+                      <div className="text-3xl font-bold font-mono text-slate-100 py-1">
+                        {telemetry?.ttcAlert?.ttcSeconds && telemetry.ttcAlert.ttcSeconds < 50 ? `${telemetry.ttcAlert.ttcSeconds.toFixed(1)}s` : 'CLEAR'}
+                      </div>
+                      <div className="text-xs font-mono text-slate-400 leading-tight">
+                        {telemetry?.ttcAlert?.message || 'Clear forward trajectory.'}
+                      </div>
+                    </div>
 
-              {/* Telemetry Sidebar */}
-              <aside className="w-full lg:w-80 flex flex-col gap-3">
-                {/* Speedometer Card */}
-                <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2 shadow-lg">
+                    {/* Path Deviation & Journey Summary Card */}
+                    <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2 text-xs font-mono shadow-lg">
+                      <div className="flex justify-between items-center border-b border-[#1A2638] pb-1.5 font-bold">
+                        <span className="text-slate-200">PATH DEVIATION & JOURNEY</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] ${pathDev.journeyStatus === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
+                          {pathDev.journeyStatus || 'IN_PROGRESS'}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex justify-between text-slate-300">
+                          <span>Current Deviation:</span>
+                          <span className="font-bold text-cyan-400">{pathDev.currentMeters?.toFixed(3) || '0.000'} m</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span>Lane Keeping:</span>
+                          <span className="font-bold text-emerald-400">{pathDev.laneKeepingPrecisionPct || 100}%</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#131F33]">
+                        <button
+                          onClick={() => {
+                            sendFault({ action: 'complete_journey' });
+                            setShowSummaryModal(true);
+                          }}
+                          className="p-1.5 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 font-bold hover:bg-emerald-600/30"
+                        >
+                          🏁 End Journey
+                        </button>
+                        <button
+                          onClick={() => {
+                            sendFault({ action: 'reset_journey' });
+                            setShowSummaryModal(false);
+                          }}
+                          className="p-1.5 rounded bg-cyan-600/20 border border-cyan-500/40 text-cyan-300 font-bold hover:bg-cyan-600/30"
+                        >
+                          🔄 Reset Trip
+                        </button>
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+
+                {/* Fault Injection Control Panel */}
+                <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-3 shadow-lg">
                   <div className="flex justify-between items-center border-b border-[#1A2638] pb-2 text-xs font-mono">
-                    <span className="text-cyan-400 font-bold">VEHICLE SPEED</span>
-                    <span className="text-emerald-400 font-bold">{telemetry?.metrics?.driveMode || 'AUTONOMOUS'}</span>
+                    <span className="text-cyan-400 font-bold">EDGE-CASE & FAULT INJECTION DISPATCHER</span>
+                    <span className="text-slate-400">BI-DIRECTIONAL WS</span>
                   </div>
-                  <div className="flex items-baseline justify-center py-2 gap-2">
-                    <span className="text-5xl font-bold font-mono text-slate-100">{speed.toFixed(0)}</span>
-                    <span className="text-sm font-mono text-cyan-400">KM/H</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-2 border-t border-[#131F33]">
-                    <div className="text-slate-400">STEERING: <span className="text-slate-200 font-bold">{telemetry?.metrics?.steeringAngleDeg}°</span></div>
-                    <div className="text-slate-400">BRAKE: <span className="text-rose-400 font-bold">{telemetry?.metrics?.brakePressurePct}%</span></div>
-                  </div>
-                </div>
-
-                {/* TTC Alert Card */}
-                <div className={`rounded-xl border p-4 flex flex-col gap-2 transition-all ${ttcLevel === 'CRITICAL' ? 'bg-rose-950/40 border-rose-500 animate-pulse' : ttcLevel === 'CAUTION' ? 'bg-amber-950/30 border-amber-500' : 'bg-[#080D17]/90 border-[#1A2638]'}`}>
-                  <div className="flex justify-between items-center text-xs font-mono font-bold">
-                    <span className="text-slate-200">TTC COLLISION RADAR</span>
-                    <span className={`px-2 py-0.5 rounded ${ttcLevel === 'CRITICAL' ? 'bg-rose-500 text-white' : ttcLevel === 'CAUTION' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                      {ttcLevel}
-                    </span>
-                  </div>
-                  <div className="text-3xl font-bold font-mono text-slate-100 py-1">
-                    {telemetry?.ttcAlert?.ttcSeconds && telemetry.ttcAlert.ttcSeconds < 50 ? `${telemetry.ttcAlert.ttcSeconds.toFixed(1)}s` : 'CLEAR'}
-                  </div>
-                  <div className="text-xs font-mono text-slate-400 leading-tight">
-                    {telemetry?.ttcAlert?.message || 'Clear forward trajectory.'}
-                  </div>
-                </div>
-
-                {/* Object Breakdown & Pedestrian Counters */}
-                <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2 text-xs font-mono shadow-lg">
-                  <div className="flex justify-between items-center border-b border-[#1A2638] pb-1.5 font-bold">
-                    <span className="text-slate-200">PERCEPTION TARGETS</span>
-                    <span className="text-cyan-400">{telemetry?.objects?.length || 0} TRACKED</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div className="p-2 rounded bg-[#050A14] flex justify-between"><span>Cars</span><span className="font-bold">{telemetry?.objects?.filter(o => o.class==='car').length || 0}</span></div>
-                    <div className={`p-2 rounded flex justify-between ${activePeds > 0 ? 'bg-rose-950/50 border border-rose-500/50 text-rose-300' : 'bg-[#050A14]'}`}>
-                      <span>Pedestrians</span>
-                      <span className="font-bold">{activePeds} (Tot: {totalPeds})</span>
-                    </div>
-                    <div className="p-2 rounded bg-[#050A14] flex justify-between"><span>Hazards</span><span className="font-bold text-amber-400">{hazardCount} Events</span></div>
-                    <div className="p-2 rounded bg-[#050A14] flex justify-between"><span>Distance</span><span className="font-bold text-cyan-300">{(totalDist / 1000).toFixed(2)} km</span></div>
-                  </div>
-                </div>
-
-                {/* Path Deviation & Journey Summary Card */}
-                <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2 text-xs font-mono shadow-lg">
-                  <div className="flex justify-between items-center border-b border-[#1A2638] pb-1.5 font-bold">
-                    <span className="text-slate-200">PATH DEVIATION & JOURNEY</span>
-                    <span className={`px-1.5 py-0.2 rounded text-[10px] ${pathDev.journeyStatus === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-cyan-500/20 text-cyan-300'}`}>
-                      {pathDev.journeyStatus || 'IN_PROGRESS'}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between text-slate-300">
-                      <span>Current Deviation:</span>
-                      <span className="font-bold text-cyan-400">{pathDev.currentMeters?.toFixed(3) || '0.000'} m</span>
-                    </div>
-                    <div className="flex justify-between text-slate-300">
-                      <span>Average Deviation:</span>
-                      <span className="font-bold text-slate-200">{pathDev.avgMeters?.toFixed(3) || '0.000'} m</span>
-                    </div>
-                    <div className="flex justify-between text-slate-300">
-                      <span>Max Peak Deviation:</span>
-                      <span className={`font-bold ${pathDev.maxMeters > 1.0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                        {pathDev.maxMeters?.toFixed(3) || '0.000'} m
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-slate-300">
-                      <span>Lane Keeping Precision:</span>
-                      <span className="font-bold text-emerald-400">{pathDev.laneKeepingPrecisionPct || 100}%</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#131F33]">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs font-mono">
                     <button
-                      onClick={() => {
-                        sendFault({ action: 'complete_journey' });
-                        setShowSummaryModal(true);
-                      }}
-                      className="p-1.5 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 font-bold hover:bg-emerald-600/30"
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'cut_in_vehicle', duration_sec: 8 })}
+                      className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-cyan-500 text-slate-200 hover:bg-[#0E1626] font-bold"
                     >
-                      🏁 End Journey
+                      ⚠️ Cut-In Car
                     </button>
                     <button
-                      onClick={() => {
-                        sendFault({ action: 'reset_journey' });
-                        setShowSummaryModal(false);
-                      }}
-                      className="p-1.5 rounded bg-cyan-600/20 border border-cyan-500/40 text-cyan-300 font-bold hover:bg-cyan-600/30"
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'pedestrian_jaywalking', duration_sec: 8 })}
+                      className="p-2.5 rounded-lg bg-[#0A101D] border border-rose-500/60 hover:border-rose-400 text-rose-300 hover:bg-[#1A0D18] font-bold shadow-[0_0_10px_rgba(255,42,109,0.2)]"
                     >
-                      🔄 Reset Trip
+                      🚶 Jaywalking
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'pothole_hazard', duration_sec: 8 })}
+                      className="p-2.5 rounded-lg bg-[#0A101D] border border-amber-500/60 hover:border-amber-400 text-amber-300 hover:bg-[#1A1408] font-bold shadow-[0_0_10px_rgba(250,204,21,0.2)]"
+                    >
+                      🕳️ Pothole Hazard
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'sudden_brake', duration_sec: 8 })}
+                      className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-cyan-500 text-slate-200 hover:bg-[#0E1626] font-bold"
+                    >
+                      🛑 Hard Brake
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'weather_degradation', duration_sec: 10 })}
+                      className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-cyan-500 text-slate-200 hover:bg-[#0E1626] font-bold"
+                    >
+                      🌫️ Weather
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'reset_simulation' })}
+                      className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-emerald-500 text-emerald-400 hover:bg-[#0E1626] font-bold"
+                    >
+                      🔄 Reset / Clear
                     </button>
                   </div>
-                </div>
+                </section>
+              </div>
+            )}
 
-                {/* 5. Autonomous Model-Driven Sensor Gating Card */}
-                <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-3.5 flex flex-col gap-2 text-xs font-mono shadow-lg">
-                  <div className="flex items-center justify-between border-b border-[#1A2638] pb-1.5 font-bold">
-                    <span className="text-slate-200">AUTONOMOUS SENSOR GATING</span>
-                    <span className="text-[10px] text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/30">AI ADAPTIVE</span>
+            {/* PAGE 2: DECISION LOG & ARBITER STREAM */}
+            {activeTab === 'arbiter' && (
+              <div className="flex flex-col gap-4">
+                <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] flex flex-col shadow-lg overflow-hidden h-[600px]">
+                  <div className="bg-[#0A101D] px-4 py-3 border-b border-[#1A2638] flex items-center justify-between text-xs font-mono">
+                    <span className="text-purple-400 font-bold uppercase flex items-center gap-2">
+                      <span>PAGE 2 // AV DECISION STREAM &amp; MULTI-HYPOTHESIS ARBITER LOG</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {['ALL', 'CRITICAL', 'BRAKE', 'MAINTAIN'].map(f => (
+                        <button
+                          key={f}
+                          onClick={() => setFilterAction(f)}
+                          className={`px-2.5 py-1 rounded ${filterAction === f ? 'bg-purple-500/20 text-purple-300 font-bold border border-purple-500/40' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-5 gap-1.5 text-center pt-1">
+                  <div className="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-2 bg-[#05070D]">
+                    {logs.filter(l => filterAction === 'ALL' || l.action.toUpperCase().includes(filterAction)).map(log => (
+                      <div key={log.id} className="p-3 rounded-lg bg-[#090F1B] border border-[#141F30] flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">[{log.timestamp}]</span>
+                            <span className={`px-2 py-0.5 rounded font-bold ${log.urgency === 'critical' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : log.action.includes('Brake') ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'}`}>
+                              {log.action.toUpperCase()}
+                            </span>
+                          </div>
+                          <span className="text-cyan-400 font-bold">CONF: {(log.confidence * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="text-slate-300 font-mono text-[11px]">&gt; {log.primaryReason}</div>
+                      </div>
+                    ))}
+                    <div ref={terminalEndRef} />
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {/* PAGE 3: SENSOR MATRIX & DYNAMIC SENSOR GATING */}
+            {activeTab === 'matrix' && (
+              <div className="flex flex-col gap-4">
+                {/* 1. Sensor Gating & Allocation Banner */}
+                <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-3 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-[#1A2638] pb-2 font-mono text-xs font-bold">
+                    <span className="text-emerald-400 uppercase">PAGE 3 // AUTONOMOUS SENSOR GATING &amp; DYNAMIC ALLOCATION MATRIX</span>
+                    <span className="text-slate-400">99.8% ALLOCATION EFFICIENCY</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2 text-center pt-1 font-mono">
                     {['camera', 'lidar', 'radar', 'imu', 'gnss'].map(s => {
                       const st = (telemetry?.metrics?.sensorStatus?.[s] || 'ACTIVE').toUpperCase();
                       const isBoost = st.includes('BOOST');
                       const isDeg = st.includes('DEGRADED');
                       const isStb = st.includes('STANDBY');
                       return (
-                        <div key={s} className="flex flex-col items-center gap-1 p-1.5 rounded bg-[#050A14] border border-[#142033]">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase">{s}</span>
-                          <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${
+                        <div key={s} className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-[#050A14] border border-[#142033]">
+                          <span className="text-xs text-slate-300 font-bold uppercase">{s}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             isBoost ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse' :
                             isDeg ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse' :
                             isStb ? 'bg-slate-800 text-slate-400' :
                             'bg-emerald-500/20 text-emerald-300'
                           }`}>
-                            {isBoost ? 'BOOST' : isDeg ? 'DEGRAD' : isStb ? 'STDBY' : 'ACTIVE'}
+                            {isBoost ? 'BOOSTED' : isDeg ? 'DEGRADED' : isStb ? 'STANDBY' : 'ACTIVE'}
                           </span>
                         </div>
                       );
                     })}
                   </div>
                   {telemetry?.metrics?.sensorOrchestration?.rationale && (
-                    <div className="p-2 rounded bg-[#050A14] border border-[#142033] text-[10px] text-slate-300 leading-snug">
-                      <span className="text-purple-400 font-bold">AI Allocation: </span>
+                    <div className="p-2.5 rounded bg-[#050A14] border border-[#142033] text-xs font-mono text-slate-300">
+                      <span className="text-emerald-400 font-bold">Sensor Allocation Rationale: </span>
                       {telemetry.metrics.sensorOrchestration.rationale}
                     </div>
                   )}
                 </div>
-              </aside>
-            </div>
 
-            {/* Middle Section: Sensor Confidence Evolution Panel */}
-            <SensorConfidencePanel confidenceData={telemetry?.sensorConfidence} />
+                {/* 2. Sensor Confidence Evolution Panel */}
+                <SensorConfidencePanel confidenceData={telemetry?.sensorConfidence} />
 
-            {/* Bottom Row: Decision Log & Control Panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-              {/* Decision Log */}
-              <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] flex flex-col shadow-lg overflow-hidden h-[340px]">
-                <div className="bg-[#0A101D] px-4 py-2.5 border-b border-[#1A2638] flex items-center justify-between text-xs font-mono">
-                  <span className="text-cyan-400 font-bold">AV DECISION STREAM & EXPLAINABILITY LOG</span>
-                  <div className="flex items-center gap-1">
-                    {['ALL', 'CRITICAL', 'BRAKE', 'MAINTAIN'].map(f => (
-                      <button
-                        key={f}
-                        onClick={() => setFilterAction(f)}
-                        className={`px-2 py-0.5 rounded ${filterAction === f ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400'}`}
-                      >
-                        {f}
-                      </button>
-                    ))}
+                {/* 3. Sensor Fault Injector */}
+                <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-3 shadow-lg">
+                  <div className="flex justify-between items-center border-b border-[#1A2638] pb-2 text-xs font-mono">
+                    <span className="text-cyan-400 font-bold">SENSOR TEST BENCH &amp; FAULT SIMULATION</span>
+                    <span className="text-slate-400">TRIGGER LIVE SENSOR DEGRADATION</span>
                   </div>
-                </div>
-                <div className="flex-1 p-3 overflow-y-auto font-mono text-xs space-y-1.5 bg-[#05070D]">
-                  {logs.filter(l => filterAction === 'ALL' || l.action.toUpperCase().includes(filterAction)).map(log => (
-                    <div key={log.id} className="p-2 rounded bg-[#090F1B] border border-[#141F30] flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-500">[{log.timestamp}]</span>
-                        <span className={`px-1.5 py-0.2 rounded font-bold ${log.urgency === 'critical' ? 'bg-rose-500/20 text-rose-300' : log.action.includes('Brake') ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
-                          {log.action.toUpperCase()}
-                        </span>
-                        <span className="text-cyan-400">CONF: {(log.confidence * 100).toFixed(0)}%</span>
-                      </div>
-                      <div className="text-slate-300">&gt; {log.primaryReason}</div>
-                    </div>
-                  ))}
-                  <div ref={terminalEndRef} />
-                </div>
-              </section>
-
-              {/* Fault Injection Control Panel */}
-              <section className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-3 shadow-lg">
-                <div className="flex justify-between items-center border-b border-[#1A2638] pb-2 text-xs font-mono">
-                  <span className="text-cyan-400 font-bold">EDGE-CASE & FAULT INJECTION DISPATCHER</span>
-                  <span className="text-slate-400">BI-DIRECTIONAL WS</span>
-                </div>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 text-xs font-mono">
-                  <button
-                    onClick={() => sendFault({ action: 'inject_fault', fault_type: 'cut_in_vehicle', duration_sec: 8 })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-cyan-500 text-slate-200 hover:bg-[#0E1626] font-bold"
-                  >
-                    ⚠️ Cut-In Car
-                  </button>
-                  <button
-                    onClick={() => sendFault({ action: 'inject_fault', fault_type: 'pedestrian_jaywalking', duration_sec: 8 })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-rose-500/60 hover:border-rose-400 text-rose-300 hover:bg-[#1A0D18] font-bold shadow-[0_0_10px_rgba(255,42,109,0.2)]"
-                  >
-                    🚶 Jaywalking
-                  </button>
-                  <button
-                    onClick={() => sendFault({ action: 'inject_fault', fault_type: 'pothole_hazard', duration_sec: 8 })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-amber-500/60 hover:border-amber-400 text-amber-300 hover:bg-[#1A1408] font-bold shadow-[0_0_10px_rgba(250,204,21,0.2)]"
-                  >
-                    🕳️ Pothole Hazard
-                  </button>
-                  <button
-                    onClick={() => sendFault({ action: 'inject_fault', fault_type: 'sudden_brake', duration_sec: 8 })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-cyan-500 text-slate-200 hover:bg-[#0E1626] font-bold"
-                  >
-                    🛑 Hard Brake
-                  </button>
-                  <button
-                    onClick={() => sendFault({ action: 'inject_fault', fault_type: 'weather_degradation', duration_sec: 10 })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-cyan-500 text-slate-200 hover:bg-[#0E1626] font-bold"
-                  >
-                    🌫️ Weather
-                  </button>
-                  <button
-                    onClick={() => sendFault({ action: 'inject_fault', fault_type: 'sensor_blindspot', duration_sec: 8 })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-purple-500 text-purple-300 hover:bg-[#0E1626] font-bold"
-                  >
-                    🚫 Blindspot
-                  </button>
-                  <button
-                    onClick={() => sendFault({ action: 'reset_simulation' })}
-                    className="p-2.5 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-emerald-500 text-emerald-400 hover:bg-[#0E1626] font-bold col-span-2"
-                  >
-                    🔄 Reset Nominal / Clear
-                  </button>
-                </div>
-
-                {/* Custom JSON Dispatcher */}
-                <div className="flex flex-col gap-2 pt-2 border-t border-[#162234]">
-                  <textarea
-                    value={customJson}
-                    onChange={(e) => setCustomJson(e.target.value)}
-                    rows={2}
-                    className="bg-[#03060B] border border-[#1A2638] rounded p-2 text-xs font-mono text-cyan-300 resize-none"
-                  />
-                  <button
-                    onClick={() => {
-                      try { sendFault(JSON.parse(customJson)); } catch(e){}
-                    }}
-                    className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 text-white rounded font-mono text-xs font-bold"
-                  >
-                    TRANSMIT JSON PAYLOAD OVER /ws/telemetry
-                  </button>
-                </div>
-              </section>
-            </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                    <button
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'weather_degradation', duration_sec: 10 })}
+                      className="p-3 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-amber-500 text-amber-300 font-bold"
+                    >
+                      🌫️ Severe Fog (CAM ↓38%)
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'sensor_blindspot', duration_sec: 8 })}
+                      className="p-3 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-rose-500 text-rose-300 font-bold"
+                    >
+                      🚫 Blindspot (CAM/LiDAR Occluded)
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'inject_fault', fault_type: 'lidar_failure', duration_sec: 8 })}
+                      className="p-3 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-rose-500 text-rose-300 font-bold"
+                    >
+                      ⚡ LiDAR Fail (5%)
+                    </button>
+                    <button
+                      onClick={() => sendFault({ action: 'clear_faults' })}
+                      className="p-3 rounded-lg bg-[#0A101D] border border-[#1A2638] hover:border-emerald-500 text-emerald-400 font-bold"
+                    >
+                      🔄 Reset / Recover
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
           </main>
 
           {/* End of Journey Summary Report Modal */}
