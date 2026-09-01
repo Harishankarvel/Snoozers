@@ -1,0 +1,9 @@
+fastapi>=0.103.1
+uvicorn>=0.23.2
+websockets>=11.0.3
+ultralytics>=8.0.0 # YOLOv8
+numpy>=1.24.3
+opencv-python>=4.8.0.76
+pydantic>=2.4.2
+filterpy>=1.4.5 # Often used for SORT/Kalman filters
+scipy>=1.11.2
