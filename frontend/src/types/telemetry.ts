@@ -48,11 +48,43 @@ export interface AVDecision {
 }
 
 export interface SensorStatusMap {
-  camera: 'HEALTHY' | 'DEGRADED' | 'FAULT';
-  lidar: 'HEALTHY' | 'DEGRADED' | 'FAULT';
-  radar: 'HEALTHY' | 'DEGRADED' | 'FAULT';
-  imu: 'HEALTHY' | 'DEGRADED' | 'FAULT';
-  gnss: 'HEALTHY' | 'DEGRADED' | 'FAULT';
+  camera: 'HEALTHY' | 'DEGRADED' | 'FAULT' | 'ACTIVE' | 'BOOSTED' | 'STANDBY' | string;
+  lidar: 'HEALTHY' | 'DEGRADED' | 'FAULT' | 'ACTIVE' | 'BOOSTED' | 'STANDBY' | string;
+  radar: 'HEALTHY' | 'DEGRADED' | 'FAULT' | 'ACTIVE' | 'BOOSTED' | 'STANDBY' | string;
+  imu: 'HEALTHY' | 'DEGRADED' | 'FAULT' | 'ACTIVE' | 'BOOSTED' | 'STANDBY' | string;
+  gnss: 'HEALTHY' | 'DEGRADED' | 'FAULT' | 'ACTIVE' | 'BOOSTED' | 'STANDBY' | string;
+}
+
+export interface SensorOrchestrationState {
+  matrix: SensorStatusMap;
+  rationale: string;
+}
+
+export interface JourneySummary {
+  status: 'IN_PROGRESS' | 'COMPLETED' | string;
+  durationSeconds: number;
+  durationFormatted: string;
+  totalDistanceMeters: number;
+  totalDistanceKm: number;
+  averageSpeedKmh: number;
+  maxSpeedKmh: number;
+  hazardEventsTackled: number;
+  activePedestriansCount: number;
+  totalPedestriansDetected: number;
+  avgPathDeviationMeters: number;
+  maxPathDeviationMeters: number;
+  laneKeepingPrecisionPct: number;
+  aiSafetyGrade: string;
+  sensorGatingEfficiency: string;
+  sensorAllocationRationale: string;
+}
+
+export interface PathDeviationMetrics {
+  currentMeters: number;
+  avgMeters: number;
+  maxMeters: number;
+  laneKeepingPrecisionPct: number;
+  journeyStatus: 'IN_PROGRESS' | 'COMPLETED' | string;
 }
 
 export type SensorTrend = 'RISING' | 'FALLING' | 'STABLE';
@@ -124,7 +156,16 @@ export interface VehicleMetrics {
   batterySoc: number; // 0 to 100%
   sensorStatus: SensorStatusMap;
   distanceToLeadVehicle: number; // meters
+  totalDistanceTravelledMeters?: number;
+  hazardEventsTackled?: number;
+  activePedestriansCount?: number;
+  totalPedestriansDetected?: number;
+  pathDeviation?: PathDeviationMetrics;
+  sensorOrchestration?: SensorOrchestrationState;
+  journeySummary?: JourneySummary;
+  inferenceLatencyMs?: number;
 }
+
 
 export interface TelemetryPacket {
   timestamp: number;
@@ -151,10 +192,11 @@ export interface WebSocketMetrics {
 }
 
 export interface FaultInjectionPayload {
-  action: 'inject_fault' | 'clear_faults' | 'emergency_takeover' | 'reset_simulation' | 'set_scenario';
+  action: 'inject_fault' | 'clear_faults' | 'emergency_takeover' | 'reset_simulation' | 'reset_journey' | 'complete_journey' | 'set_scenario';
   faultType?: 'cut_in_vehicle' | 'pedestrian_jaywalking' | 'sensor_blindspot' | 'sudden_brake' | 'weather_degradation' | 'lidar_failure' | 'camera_glare' | string;
   severity?: 'low' | 'medium' | 'high' | 'critical';
   durationSec?: number;
   params?: Record<string, any>;
   timestamp?: number;
 }
+

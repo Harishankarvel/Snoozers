@@ -3,37 +3,30 @@ import {
   Gauge, 
   ShieldAlert, 
   Compass, 
-  Car, 
-  Users, 
-  Bike, 
-  Truck, 
-  AlertOctagon, 
   Activity, 
   Zap,
-  Target,
-  ArrowUpRight,
   Radio,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle
+  AlertTriangle
 } from 'lucide-react';
 import { TelemetryPacket } from '../types/telemetry';
 
 interface TelemetrySidebarProps {
   telemetry: TelemetryPacket | null;
+  onEndJourney?: () => void;
+  onResetTrip?: () => void;
 }
 
-export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({ telemetry }) => {
+export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({ 
+  telemetry, 
+  onEndJourney, 
+  onResetTrip 
+}) => {
   const metrics = telemetry?.metrics;
   const ttcAlert = telemetry?.ttcAlert;
-  const objects = telemetry?.objects || [];
 
-  // Categorize detected objects
-  const carsCount = objects.filter((o) => o.class === 'car').length;
-  const pedestriansCount = objects.filter((o) => o.class === 'pedestrian').length;
-  const trucksCount = objects.filter((o) => o.class === 'truck').length;
-  const cyclistsCount = objects.filter((o) => o.class === 'cyclist' || o.class === 'motorcycle').length;
-  const obstaclesCount = objects.filter((o) => o.class === 'obstacle' || o.class === 'debris').length;
+  const hazardsTackled = metrics?.hazardEventsTackled ?? 0;
+  const pathDev = metrics?.pathDeviation;
+  const sensorOrchestration = metrics?.sensorOrchestration;
 
   const isCriticalTtc = ttcAlert?.level === 'CRITICAL';
   const isCautionTtc = ttcAlert?.level === 'CAUTION';
@@ -46,6 +39,7 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({ telemetry })
   const throttle = metrics?.throttlePct ?? 0;
   const accelG = metrics?.accelerationG ?? 0;
   const latG = metrics?.lateralG ?? 0;
+  const totalDistKm = ((metrics?.totalDistanceTravelledMeters ?? 0) / 1000).toFixed(2);
 
   // Speedometer Arc calculation (0 to 140 km/h)
   const maxSpeed = 140;
@@ -53,18 +47,23 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({ telemetry })
   const arcStrokeDash = 220;
   const arcOffset = arcStrokeDash - (arcStrokeDash * speedRatio);
 
-  const getSensorStatusIcon = (status?: 'HEALTHY' | 'DEGRADED' | 'FAULT') => {
-    switch (status) {
-      case 'HEALTHY':
-        return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'DEGRADED':
-        return <AlertTriangle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />;
-      case 'FAULT':
-        return <XCircle className="w-3.5 h-3.5 text-rose-400 animate-pulse" />;
-      default:
-        return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />;
+  const getSensorStatusBadge = (status?: string) => {
+    const s = (status || 'ACTIVE').toUpperCase();
+    if (s.includes('BOOSTED')) {
+      return <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40 animate-pulse">BOOSTED</span>;
     }
+    if (s.includes('DEGRADED')) {
+      return <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">DEGRADED</span>;
+    }
+    if (s.includes('FAULT')) {
+      return <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">FAULT</span>;
+    }
+    if (s.includes('STANDBY')) {
+      return <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-400">STANDBY</span>;
+    }
+    return <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">ACTIVE</span>;
   };
+
 
   return (
     <aside className="w-full lg:w-80 flex flex-col gap-3">
@@ -242,88 +241,106 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({ telemetry })
         </div>
       </div>
 
-      {/* 3. Identified Object Classes Breakdown */}
-      <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2.5 shadow-lg">
-        <div className="flex items-center justify-between border-b border-[#1A2638] pb-2">
+
+      {/* 4. Path Deviation & Journey Analytics Card */}
+      <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-4 flex flex-col gap-2.5 shadow-lg text-xs font-mono">
+        <div className="flex items-center justify-between border-b border-[#1A2638] pb-2 font-bold">
           <div className="flex items-center gap-2">
-            <Target className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-mono font-bold tracking-wider text-slate-200 uppercase">
-              PERCEPTION TARGETS
-            </span>
+            <Compass className="w-4 h-4 text-cyan-400" />
+            <span className="text-slate-200 uppercase tracking-wider">PATH DEVIATION</span>
           </div>
-          <span className="text-xs font-mono text-cyan-400 font-bold">
-            {objects.length} TOTAL
+          <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+            pathDev?.journeyStatus === 'COMPLETED' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-cyan-500/20 text-cyan-300'
+          }`}>
+            {pathDev?.journeyStatus || 'IN_PROGRESS'}
           </span>
         </div>
 
-        {/* Objects Category Grid */}
-        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Car className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Vehicles</span>
-            </div>
-            <span className="font-bold text-slate-100">{carsCount}</span>
+        <div className="space-y-1.5 pt-1">
+          <div className="flex justify-between text-slate-300">
+            <span className="text-slate-400">Current Deviation:</span>
+            <span className="font-bold text-cyan-400">{pathDev?.currentMeters?.toFixed(3) || '0.000'} m</span>
           </div>
-
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Users className="w-3.5 h-3.5 text-amber-400" />
-              <span>Pedestrians</span>
-            </div>
-            <span className={`font-bold ${pedestriansCount > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
-              {pedestriansCount}
+          <div className="flex justify-between text-slate-300">
+            <span className="text-slate-400">Average Lateral Dev:</span>
+            <span className="font-bold text-slate-200">{pathDev?.avgMeters?.toFixed(3) || '0.000'} m</span>
+          </div>
+          <div className="flex justify-between text-slate-300">
+            <span className="text-slate-400">Max Peak Deviation:</span>
+            <span className={`font-bold ${(pathDev?.maxMeters || 0) > 1.0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {pathDev?.maxMeters?.toFixed(3) || '0.000'} m
             </span>
           </div>
-
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Truck className="w-3.5 h-3.5 text-blue-400" />
-              <span>Trucks</span>
-            </div>
-            <span className="font-bold text-slate-100">{trucksCount}</span>
+          <div className="flex justify-between text-slate-300">
+            <span className="text-slate-400">Lane Keeping Precision:</span>
+            <span className="font-bold text-emerald-400">{pathDev?.laneKeepingPrecisionPct ?? 100}%</span>
           </div>
-
-          <div className="flex items-center justify-between p-2 rounded bg-[#050A14] border border-[#141E2F]">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Bike className="w-3.5 h-3.5 text-purple-400" />
-              <span>Cyclists</span>
-            </div>
-            <span className="font-bold text-slate-100">{cyclistsCount}</span>
+          <div className="flex justify-between text-slate-300 border-t border-[#131F33] pt-1 mt-1">
+            <span className="text-slate-400">Distance Travelled:</span>
+            <span className="font-bold text-slate-200">{totalDistKm} km</span>
           </div>
+        </div>
+
+        {/* Journey Control Actions */}
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#131F33]">
+          <button
+            onClick={onEndJourney}
+            className="flex items-center justify-center gap-1.5 p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/50 hover:bg-emerald-900/50 text-emerald-300 font-bold transition-all shadow-[0_0_10px_rgba(0,245,155,0.15)]"
+          >
+            <span>🏁 End Journey</span>
+          </button>
+          <button
+            onClick={onResetTrip}
+            className="flex items-center justify-center gap-1.5 p-2 rounded-lg bg-[#0A111F] border border-[#1A2638] hover:border-cyan-500 text-slate-300 hover:text-white font-bold transition-all"
+          >
+            <span>🔄 Reset Trip</span>
+          </button>
         </div>
       </div>
 
-      {/* 4. Subsystem & Sensor Health Matrix */}
-      <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-3 flex flex-col gap-2 shadow-lg text-xs font-mono">
-        <div className="flex items-center justify-between text-[11px] text-slate-400 uppercase font-bold border-b border-[#1A2638] pb-1.5">
-          <span>SENSOR MATRIX</span>
-          <span className="text-emerald-400">ONLINE</span>
+      {/* 5. Autonomous Model-Driven Sensor Gating & Matrix */}
+      <div className="bg-[#080D17]/90 backdrop-blur-md rounded-xl border border-[#1A2638] p-3.5 flex flex-col gap-2.5 shadow-lg text-xs font-mono">
+        <div className="flex items-center justify-between text-[11px] uppercase font-bold border-b border-[#1A2638] pb-1.5">
+          <div className="flex items-center gap-1.5 text-slate-300">
+            <Radio className="w-3.5 h-3.5 text-purple-400" />
+            <span>AUTONOMOUS SENSOR GATING</span>
+          </div>
+          <span className="text-[10px] text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded border border-purple-500/30">AI ADAPTIVE</span>
         </div>
 
-        <div className="grid grid-cols-5 gap-1 pt-1 text-center">
-          <div className="flex flex-col items-center gap-1 p-1 rounded bg-[#050A14]">
-            <span className="text-[10px] text-slate-400">CAM</span>
-            {getSensorStatusIcon(metrics?.sensorStatus?.camera)}
+        <div className="grid grid-cols-5 gap-1.5 text-center">
+          <div className="flex flex-col items-center gap-1 p-1.5 rounded bg-[#050A14] border border-[#131E30]">
+            <span className="text-[10px] text-slate-400 font-bold">CAM</span>
+            {getSensorStatusBadge(metrics?.sensorStatus?.camera)}
           </div>
-          <div className="flex flex-col items-center gap-1 p-1 rounded bg-[#050A14]">
-            <span className="text-[10px] text-slate-400">LIDAR</span>
-            {getSensorStatusIcon(metrics?.sensorStatus?.lidar)}
+          <div className="flex flex-col items-center gap-1 p-1.5 rounded bg-[#050A14] border border-[#131E30]">
+            <span className="text-[10px] text-slate-400 font-bold">LIDAR</span>
+            {getSensorStatusBadge(metrics?.sensorStatus?.lidar)}
           </div>
-          <div className="flex flex-col items-center gap-1 p-1 rounded bg-[#050A14]">
-            <span className="text-[10px] text-slate-400">RADAR</span>
-            {getSensorStatusIcon(metrics?.sensorStatus?.radar)}
+          <div className="flex flex-col items-center gap-1 p-1.5 rounded bg-[#050A14] border border-[#131E30]">
+            <span className="text-[10px] text-slate-400 font-bold">RADAR</span>
+            {getSensorStatusBadge(metrics?.sensorStatus?.radar)}
           </div>
-          <div className="flex flex-col items-center gap-1 p-1 rounded bg-[#050A14]">
-            <span className="text-[10px] text-slate-400">IMU</span>
-            {getSensorStatusIcon(metrics?.sensorStatus?.imu)}
+          <div className="flex flex-col items-center gap-1 p-1.5 rounded bg-[#050A14] border border-[#131E30]">
+            <span className="text-[10px] text-slate-400 font-bold">IMU</span>
+            {getSensorStatusBadge(metrics?.sensorStatus?.imu)}
           </div>
-          <div className="flex flex-col items-center gap-1 p-1 rounded bg-[#050A14]">
-            <span className="text-[10px] text-slate-400">GNSS</span>
-            {getSensorStatusIcon(metrics?.sensorStatus?.gnss)}
+          <div className="flex flex-col items-center gap-1 p-1.5 rounded bg-[#050A14] border border-[#131E30]">
+            <span className="text-[10px] text-slate-400 font-bold">GNSS</span>
+            {getSensorStatusBadge(metrics?.sensorStatus?.gnss)}
           </div>
         </div>
+
+        {/* Gating Rationale Subtitle */}
+        {sensorOrchestration?.rationale && (
+          <div className="p-2 rounded bg-[#050A14] border border-[#142033] text-[10px] text-slate-300 leading-snug">
+            <span className="text-purple-400 font-bold">AI Allocation: </span>
+            {sensorOrchestration.rationale}
+          </div>
+        )}
       </div>
     </aside>
   );
 };
+
+

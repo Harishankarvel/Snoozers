@@ -13,7 +13,9 @@ import {
   RefreshCw,
   Clock,
   Wifi,
-  WifiOff
+  WifiOff,
+  LayoutDashboard,
+  Terminal
 } from 'lucide-react';
 import { WebSocketMetrics } from '../types/telemetry';
 import { audioManager } from '../utils/audioAlerts';
@@ -25,6 +27,8 @@ interface HeaderProps {
   onToggleMockMode: () => void;
   onEmergencyStop: () => void;
   activeFaultsCount: number;
+  activeTab: 'mission' | 'arbiter';
+  onTabChange: (tab: 'mission' | 'arbiter') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,6 +38,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMockMode,
   onEmergencyStop,
   activeFaultsCount,
+  activeTab,
+  onTabChange,
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -140,8 +146,43 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Center: Dual WebSocket Live Diagnostics */}
-      <div className="flex items-center gap-3 bg-[#0B1220]/80 p-1.5 px-3 rounded-lg border border-[#1E2D45] text-xs font-mono">
+      {/* Center Navigation Tab Selector */}
+      <div className="flex items-center gap-1 bg-[#0A101D] p-1 rounded-xl border border-[#1A2638] shadow-inner">
+        <button
+          id="tab-mission-hud"
+          onClick={() => {
+            audioManager.playClick();
+            onTabChange('mission');
+          }}
+          className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+            activeTab === 'mission'
+              ? 'bg-gradient-to-r from-cyan-500/20 to-blue-600/20 text-cyan-300 border border-cyan-500/50 shadow-[0_0_12px_rgba(0,240,255,0.25)]'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0E1726] border border-transparent'
+          }`}
+        >
+          <LayoutDashboard className="w-3.5 h-3.5" />
+          <span>LIVE MISSION HUD</span>
+        </button>
+
+        <button
+          id="tab-arbiter-log"
+          onClick={() => {
+            audioManager.playClick();
+            onTabChange('arbiter');
+          }}
+          className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+            activeTab === 'arbiter'
+              ? 'bg-gradient-to-r from-purple-500/20 to-indigo-600/20 text-purple-300 border border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-[#0E1726] border border-transparent'
+          }`}
+        >
+          <Terminal className="w-3.5 h-3.5" />
+          <span>ARBITER & DECISION LOG</span>
+        </button>
+      </div>
+
+      {/* Dual WebSocket Live Diagnostics */}
+      <div className="hidden xl:flex items-center gap-3 bg-[#0B1220]/80 p-1.5 px-3 rounded-lg border border-[#1E2D45] text-xs font-mono">
         {/* Video WS Monitor */}
         <div className="flex items-center gap-2 pr-3 border-r border-[#1E2D45]">
           <div className="flex items-center gap-1.5 text-slate-300">

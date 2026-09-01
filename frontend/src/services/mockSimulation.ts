@@ -553,7 +553,7 @@ export class MockSimulationEngine {
     let minTtc = Infinity;
     let mostCriticalObj: TrackedObject | null = null;
 
-    this.objects.forEach((obj) => {
+    for (const obj of this.objects) {
       // Perspective projection to screen coords
       const scale = Math.max(0.08, Math.min(1.4, 28 / (obj.distanceZ + 5)));
       const yScreen = horizon + (h - horizon) * Math.pow(Math.max(0.02, 1 - obj.distanceZ / 100), 1.8);
@@ -615,7 +615,8 @@ export class MockSimulationEngine {
         minTtc = ttc;
         mostCriticalObj = tracked;
       }
-    });
+    }
+
 
     // Compute Temporal Sensor Confidence Evolution
     const now = Date.now();
@@ -807,16 +808,18 @@ export class MockSimulationEngine {
     const ttcAlert: TTCAlert = {
       level: minTtc < 2.5 ? 'CRITICAL' : minTtc < 4.5 ? 'CAUTION' : 'SAFE',
       ttcSeconds: minTtc === Infinity ? 99.9 : Math.round(minTtc * 10) / 10,
-      targetId: mostCriticalObj ? (mostCriticalObj as TrackedObject).id : null,
-      targetClass: mostCriticalObj ? (mostCriticalObj as TrackedObject).class : null,
-      distanceMeters: mostCriticalObj ? (mostCriticalObj as TrackedObject).distance : null,
+      targetId: mostCriticalObj ? mostCriticalObj.id : null,
+      targetClass: mostCriticalObj ? mostCriticalObj.class : null,
+      distanceMeters: mostCriticalObj ? mostCriticalObj.distance : null,
       message:
-        minTtc < 2.5
-          ? `CRITICAL TTC WARNING: Target #${mostCriticalObj?.id} (${mostCriticalObj?.class}) at ${mostCriticalObj?.distance}m!`
-          : minTtc < 4.5
-          ? `CAUTION: Headway closing on Target #${mostCriticalObj?.id}`
+        minTtc < 2.5 && mostCriticalObj
+          ? `CRITICAL TTC WARNING: Target #${mostCriticalObj.id} (${mostCriticalObj.class}) at ${mostCriticalObj.distance}m!`
+          : minTtc < 4.5 && mostCriticalObj
+          ? `CAUTION: Headway closing on Target #${mostCriticalObj.id}`
           : 'All collision corridors clear.',
     };
+
+    const hasLidarFail = this.activeFaults.has('sensor_blindspot') || this.activeFaults.has('weather_degradation');
 
     const vehicleMetrics: VehicleMetrics = {
       speedKmh: Math.round(this.egoSpeed * 10) / 10,
@@ -831,6 +834,16 @@ export class MockSimulationEngine {
       driveMode: hasEmergencyFault ? 'MANUAL_OVERRIDE' : selectedAction === 'Emergency Braking' ? 'EMERGENCY_STOP' : 'AUTONOMOUS',
       batterySoc: 88,
       distanceToLeadVehicle: leadCar ? leadCar.distance : 99.9,
+      hazardEventsTackled: this.activeFaults.size > 0 ? 1 : 0,
+      activePedestriansCount: trackedObjects.filter((o) => o.class === 'pedestrian').length,
+      totalPedestriansDetected: trackedObjects.filter((o) => o.class === 'pedestrian').length,
+      pathDeviation: {
+        currentMeters: Math.abs(this.egoSteering * 0.1),
+        avgMeters: 0.08,
+        maxMeters: 0.25,
+        laneKeepingPrecisionPct: 98.2,
+        journeyStatus: 'IN_PROGRESS',
+      },
       sensorStatus: {
         camera: currentConfidenceMap.camera.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
         lidar: currentConfidenceMap.lidar.health === 'FAULT' ? 'FAULT' : currentConfidenceMap.lidar.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
@@ -839,6 +852,7 @@ export class MockSimulationEngine {
         gnss: currentConfidenceMap.gnss.health === 'DEGRADED' ? 'DEGRADED' : 'HEALTHY',
       },
     };
+
 
     const packet: TelemetryPacket = {
       timestamp: Date.now(),
