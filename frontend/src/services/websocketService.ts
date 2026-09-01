@@ -9,7 +9,7 @@ class ReconnectingWebSocket {
   private ws: WebSocket | null = null;
   private isBinary: boolean;
   private reconnectAttempts = 0;
-  private maxReconnectInterval = 10000;
+  private maxReconnectInterval = 3000;
   private baseReconnectInterval = 1000;
   private reconnectTimer: any = null;
   private isExplicitlyClosed = false;
@@ -236,7 +236,11 @@ class AVWebSocketService {
   constructor() {
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
     const wsProtocol = isHttps ? 'wss:' : 'ws:';
-    const host = 'localhost:8000';
+    let hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
+    if (hostname === 'localhost') {
+      hostname = '127.0.0.1';
+    }
+    const host = `${hostname}:8000`;
 
     this.videoSocket = new ReconnectingWebSocket(`${wsProtocol}//${host}/ws/video`, true);
     this.telemetrySocket = new ReconnectingWebSocket(`${wsProtocol}//${host}/ws/telemetry`, false);

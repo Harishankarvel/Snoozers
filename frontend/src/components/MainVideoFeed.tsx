@@ -244,9 +244,11 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
         ctx.strokeStyle = themeColor;
         ctx.lineWidth = isCritical ? 2.5 : 1.5;
 
-        // Subtle box fill
+        // Subtle box fill with animated pulsing glow for critical/pedestrians
+        const now = Date.now();
+        const pulse = isCritical ? 0.12 + Math.sin(now * 0.008) * 0.08 : 0.06;
         ctx.fillStyle = isCritical
-          ? 'rgba(255, 42, 109, 0.18)'
+          ? `rgba(255, 42, 109, ${pulse})`
           : isCaution
           ? 'rgba(255, 184, 0, 0.1)'
           : 'rgba(0, 240, 255, 0.06)';
@@ -283,25 +285,32 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
         ctx.lineTo(xmax, ymax - cornerLen);
         ctx.stroke();
 
-        // Center Crosshair for Critical Targets
-        if (isCritical) {
+        // Center Animated Crosshair Target Lock for Pedestrians / Critical Targets
+        if (isCritical || obj.class === 'pedestrian') {
           const midX = xmin + boxW / 2;
           const midY = ymin + boxH / 2;
+          const rotAngle = (now * 0.003) % (Math.PI * 2);
+
+          ctx.save();
+          ctx.translate(midX, midY);
+          ctx.rotate(rotAngle);
           ctx.strokeStyle = '#FF2A6D';
           ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.arc(midX, midY, 14, 0, Math.PI * 2);
-          ctx.moveTo(midX - 18, midY);
-          ctx.lineTo(midX + 18, midY);
-          ctx.moveTo(midX, midY - 18);
-          ctx.lineTo(midX, midY + 18);
+          ctx.arc(0, 0, Math.min(boxW, boxH) * 0.45 + 4, 0, Math.PI * 2);
+          ctx.moveTo(-Math.min(boxW, boxH) * 0.6, 0); ctx.lineTo(Math.min(boxW, boxH) * 0.6, 0);
+          ctx.moveTo(0, -Math.min(boxW, boxH) * 0.6); ctx.lineTo(0, Math.min(boxW, boxH) * 0.6);
           ctx.stroke();
+          ctx.restore();
         }
       }
 
       // 3. Draw Cyber Identification Tag & Metrics Pill
       if (showTags) {
-        const tagText = `#${obj.id} ${obj.class.toUpperCase()} ${(obj.confidence * 100).toFixed(0)}%`;
+        const isPed = obj.class === 'pedestrian';
+        const tagText = isPed 
+          ? `🚶 JAYWALKER #${obj.id} ${(obj.confidence * 100).toFixed(0)}%`
+          : `#${obj.id} ${obj.class.toUpperCase()} ${(obj.confidence * 100).toFixed(0)}%`;
         const metricsText = `${obj.distance.toFixed(1)}m | ${obj.ttc > 50 ? 'SAFE' : `${obj.ttc.toFixed(1)}s TTC`}`;
 
         ctx.font = 'bold 11px JetBrains Mono, monospace';
@@ -324,13 +333,14 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
         ctx.fillRect(tagX, tagY, 3, tagH);
 
         // Text labels
-        ctx.fillStyle = '#F8FAFC';
+        ctx.fillStyle = isPed ? '#FF2A6D' : '#F8FAFC';
         ctx.fillText(tagText, tagX + 8, tagY + 13);
 
         ctx.fillStyle = isCritical ? '#FF2A6D' : isCaution ? '#FFB800' : '#38BDF8';
         ctx.font = '10px JetBrains Mono, monospace';
         ctx.fillText(metricsText, tagX + 8, tagY + 26);
       }
+
     });
 
     // D. Top-Right Bird's Eye View (BEV) Mini-Radar Map

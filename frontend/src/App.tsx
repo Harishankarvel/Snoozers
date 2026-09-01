@@ -4,6 +4,7 @@ import { MainVideoFeed } from './components/MainVideoFeed';
 import { TelemetrySidebar } from './components/TelemetrySidebar';
 import { DecisionLog } from './components/DecisionLog';
 import { ControlPanel } from './components/ControlPanel';
+import { EndJourneyModal } from './components/EndJourneyModal';
 import { 
   FaultInjectionPayload, 
   TelemetryPacket, 
@@ -13,8 +14,8 @@ import { avWebSocketService } from './services/websocketService';
 import { mockSimulationEngine } from './services/mockSimulation';
 
 export const App: React.FC = () => {
-  // Mode toggle: If true, runs client procedural simulator; if false, uses ws://localhost:8000
-  const [isMockMode, setIsMockMode] = useState(true);
+  // Mode toggle: Default to false (Live Backend Mode ws://localhost:8000)
+  const [isMockMode, setIsMockMode] = useState(false);
 
   // Metrics for dual WebSockets
   const [videoMetrics, setVideoMetrics] = useState<WebSocketMetrics>(avWebSocketService.videoSocket.metrics);
@@ -30,13 +31,15 @@ export const App: React.FC = () => {
   // Active faults tracker
   const [activeFaults, setActiveFaults] = useState<string[]>([]);
 
+  // End Journey modal state
+  const [isEndJourneyModalOpen, setIsEndJourneyModalOpen] = useState(false);
+
   useEffect(() => {
     // 1. Initialize real WebSocket client listeners
     avWebSocketService.init();
 
     const unsubVideoStatus = avWebSocketService.videoSocket.onStatusChange((m) => {
       setVideoMetrics({ ...m });
-      // If backend connects successfully, allow switching to live backend
       if (m.status === 'CONNECTED') {
         setIsMockMode(false);
       }
@@ -82,7 +85,6 @@ export const App: React.FC = () => {
       }
     );
 
-    // Start mock simulation by default so user immediately gets high-tech experience
     mockSimulationEngine.start();
 
     return () => {
@@ -121,6 +123,16 @@ export const App: React.FC = () => {
     });
   };
 
+  const handleEndJourney = () => {
+    handleInjectFault({ action: 'complete_journey' });
+    setIsEndJourneyModalOpen(true);
+  };
+
+  const handleResetTrip = () => {
+    handleInjectFault({ action: 'reset_journey' });
+    setIsEndJourneyModalOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-[#05070B] text-slate-100 flex flex-col antialiased font-sans select-none">
       {/* Top Fixed Header */}
@@ -145,7 +157,11 @@ export const App: React.FC = () => {
           />
 
           {/* Right Side: Real-Time Telemetry & Dynamics Sidebar */}
-          <TelemetrySidebar telemetry={currentTelemetry} />
+          <TelemetrySidebar 
+            telemetry={currentTelemetry}
+            onEndJourney={handleEndJourney}
+            onResetTrip={handleResetTrip}
+          />
         </div>
 
         {/* Bottom Section: Decision Log & Control Panel */}
@@ -160,6 +176,15 @@ export const App: React.FC = () => {
           />
         </div>
       </main>
+
+      {/* End of Journey Summary Modal */}
+      <EndJourneyModal
+        summary={currentTelemetry?.metrics?.journeySummary}
+        isOpen={isEndJourneyModalOpen}
+        onRestart={handleResetTrip}
+        onClose={() => setIsEndJourneyModalOpen(false)}
+      />
     </div>
   );
 };
+

@@ -82,8 +82,8 @@ class GuidanceModule:
             
         if self.ml_mode:
             features = self._extract_features(objects_3d, ego_speed)
-            risk_level = self.risk_model.predict([features])[0]
-            action = self.action_model.predict([features])[0]
+            risk_level = str(self.risk_model.predict([features])[0])
+            action = str(self.action_model.predict([features])[0])
         else:
             # Fallback
             result = self.evaluate_hazard_event(objects_3d, ego_speed)
