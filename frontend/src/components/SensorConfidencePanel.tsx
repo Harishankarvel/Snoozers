@@ -26,7 +26,7 @@ interface SensorConfidencePanelProps {
   confidenceData?: SensorConfidenceData;
 }
 
-const SENSOR_CONFIG: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
+const SENSOR_CONFIG: Record<string, { label: string; color: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }> = {
   camera: { label: 'CAM (Forward RGB)', color: '#00F0FF', icon: Eye },
   lidar: { label: 'LIDAR (Solid-State)', color: '#A855F7', icon: Activity },
   radar: { label: 'RADAR (77 GHz FMCW)', color: '#10B981', icon: Radio },

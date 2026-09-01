@@ -819,8 +819,6 @@ export class MockSimulationEngine {
           : 'All collision corridors clear.',
     };
 
-    const hasLidarFail = this.activeFaults.has('sensor_blindspot') || this.activeFaults.has('weather_degradation');
-
     const vehicleMetrics: VehicleMetrics = {
       speedKmh: Math.round(this.egoSpeed * 10) / 10,
       speedMph: Math.round((this.egoSpeed * 0.621371) * 10) / 10,
