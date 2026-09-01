@@ -362,7 +362,16 @@
         let minTtc = Infinity;
         let mostCrit = null;
 
+        const dt = 0.05;
         this.objects.forEach(obj => {
+          const relMps = ((this.egoSpeed - obj.speedKmh) * 1000) / 3600;
+          obj.distanceZ -= relMps * dt;
+          if (obj.distanceZ > 120.0) {
+            obj.distanceZ = 20.0 + Math.random() * 20;
+          } else if (obj.distanceZ < 5.0) {
+            obj.distanceZ = 5.0;
+          }
+
           const scale = Math.max(0.1, Math.min(1.3, 28 / (obj.distanceZ + 5)));
           const yScreen = horizon + (h - horizon) * Math.pow(Math.max(0.02, 1 - obj.distanceZ / 100), 1.8);
           const sp = (yScreen - horizon) / (h - horizon);
@@ -370,7 +379,6 @@
           const ow = (obj.class === 'truck' ? 110 : obj.class === 'pedestrian' ? 35 : 90) * scale;
           const oh = (obj.class === 'truck' ? 90 : obj.class === 'pedestrian' ? 75 : 65) * scale;
 
-          const relMps = ((this.egoSpeed - obj.speedKmh) * 1000) / 3600;
           let ttc = relMps > 0.5 && obj.distanceZ > 0 ? obj.distanceZ / relMps : Infinity;
           let risk = ttc < 2.5 || (obj.lane === 0 && obj.distanceZ < 18) || obj.class === 'pedestrian' ? 'CRITICAL' : ttc < 4.5 ? 'CAUTION' : 'SAFE';
 

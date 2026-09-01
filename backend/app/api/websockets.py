@@ -58,6 +58,12 @@ class ConnectionManager:
         self.avg_path_deviation = 0.0      # meters
         self.deviation_samples_count = 0
         self.journey_status = "IN_PROGRESS"  # "IN_PROGRESS" | "COMPLETED"
+        
+        # Dynamic Independent Traffic Simulation (Lead Car, Truck, Left Sedan)
+        self.lead_car_z = 38.0
+        self.truck_z = 44.0
+        self.sedan_z = 24.0
+        self.sedan_x = -3.5
 
     def reset_journey(self):
         self.total_distance_travelled = 0.0
@@ -79,6 +85,10 @@ class ConnectionManager:
         self.road_offset = 0.0
         self.ego_speed = 68.4
         self.brake_pressure = 0
+        self.lead_car_z = 38.0
+        self.truck_z = 44.0
+        self.sedan_z = 24.0
+        self.sedan_x = -3.5
         self.active_faults.clear()
         self.journey_status = "IN_PROGRESS"
 
@@ -260,9 +270,9 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
         draw.arc([px - pw // 2, py - ph // 2, px + pw // 2, py + ph // 2], 0, 360, fill=(255, 184, 0), width=2)
         draw.text((px - 25, py - ph - 12), "[POTHOLE]", fill=(255, 184, 0))
 
-    # 4. Multi-Vehicle Traffic Simulation
+    # 4. Multi-Vehicle Traffic Simulation (Moving Independently at Cruising Velocity)
     # A. Lead Vehicle in Center Lane (#101)
-    lead_z = 38.0
+    lead_z = max(4.0, manager_ref.lead_car_z)
     lead_x = math.sin(frame_idx * 0.04) * 0.35
     vx1, vy1, scale1, _ = compute_screen_projection(lead_x, lead_z, horizon, width, height)
     vw1 = int(90 * scale1)
@@ -273,7 +283,7 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
     draw.rectangle([vx1 + int(vw1 * 0.25), vy1 - int(vh1 * 0.4), vx1 + vw1 // 2 - 2, vy1 - int(vh1 * 0.15)], fill=(255, 0, 40))
 
     # B. Semi-Truck in Right Lane (#102 - aligned in center of right lane at x=+3.5m)
-    truck_z = 44.0
+    truck_z = max(4.0, manager_ref.truck_z)
     truck_x = 3.5
     vx2, vy2, scale2, _ = compute_screen_projection(truck_x, truck_z, horizon, width, height)
     vw2 = int(115 * scale2)
@@ -287,19 +297,12 @@ def generate_synthetic_frame(frame_idx: int, faults: Dict[str, Any], ego_speed: 
     # C. Adjacent / Cutting-In Sedan in Left Lane (#103 - aligned in center of left lane at x=-3.5m)
     has_cutin = 'cut_in_vehicle' in faults
     if has_cutin:
-        fault_data = faults['cut_in_vehicle']
-        elapsed = now - fault_data['time']
-        dur = max(1.0, fault_data['duration'])
-        alpha_cut = min(1.0, elapsed / dur)
-        # Animate Car #103 smoothly sliding from left lane (x = -3.5m) into center ego lane (x = 0.0m)
-        cut_x = -3.5 + (alpha_cut * 3.5)
-        cut_z = max(10.5, 24.0 - (alpha_cut * 13.5))
         car_cut_col = (255, 42, 109)
     else:
-        cut_x = -3.5
-        cut_z = 24.0
         car_cut_col = (50, 180, 220)
 
+    cut_x = manager_ref.sedan_x
+    cut_z = max(4.0, manager_ref.sedan_z)
     vx3, vy3, scale3, _ = compute_screen_projection(cut_x, cut_z, horizon, width, height)
     vw3 = int(90 * scale3)
     vh3 = int(60 * scale3)
@@ -519,50 +522,75 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                 objects_3d = []
                 now = time.time()
 
+                # 1. Update Traffic Vehicle Independent Dynamics
+                dt = 0.05
+                lead_speed_mps = 68.0 * 1000 / 3600
+                truck_speed_mps = 60.0 * 1000 / 3600
+                sedan_speed_mps = 74.0 * 1000 / 3600
+                ego_speed_mps = manager.ego_speed * 1000 / 3600
+
+                # Lead Car propagates forward based on relative speed
+                manager.lead_car_z += (lead_speed_mps - ego_speed_mps) * dt
+                if manager.lead_car_z > 120.0:
+                    manager.lead_car_z = 25.0
+                elif manager.lead_car_z < 6.0:
+                    manager.lead_car_z = 6.0
+
+                # Truck in Right Lane propagates forward
+                manager.truck_z += (truck_speed_mps - ego_speed_mps) * dt
+                if manager.truck_z > 120.0:
+                    manager.truck_z = 28.0
+                elif manager.truck_z < 6.0:
+                    manager.truck_z = 6.0
+
+                # Sedan in Left Lane / Cut-In
+                if has_cutin:
+                    fault_info = manager.active_faults["cut_in_vehicle"]
+                    elapsed = now - fault_info["time"]
+                    dur = max(1.0, fault_info["duration"])
+                    alpha_cut = min(1.0, elapsed / dur)
+                    manager.sedan_x = -3.5 + (alpha_cut * 3.5)
+                    manager.sedan_z = max(10.5, 24.0 - (alpha_cut * 13.5))
+                    cut_rel_vel = 12.0
+                else:
+                    manager.sedan_x = -3.5
+                    manager.sedan_z += (sedan_speed_mps - ego_speed_mps) * dt
+                    if manager.sedan_z > 120.0:
+                        manager.sedan_z = 20.0
+                    elif manager.sedan_z < 6.0:
+                        manager.sedan_z = 6.0
+                    cut_rel_vel = round(((manager.ego_speed - 74.0) * 1000 / 3600), 1)
+
                 # A. Lead Vehicle in Center Lane (#101)
-                lead_z = 38.0
                 lead_x = math.sin(manager.frame_count * 0.04) * 0.35
                 objects_3d.append({
                     "id": 101,
                     "class": "car",
                     "x": round(lead_x, 2),
                     "y": 0.0,
-                    "z": lead_z,
-                    "relative_velocity": 0.5,
+                    "z": round(manager.lead_car_z, 1),
+                    "relative_velocity": round(((manager.ego_speed - 68.0) * 1000 / 3600), 1),
                     "is_converging": False
                 })
 
-                # B. Commercial Semi-Truck in Right Lane (#102 - aligned in center of right lane at x=+3.5m)
+                # B. Commercial Semi-Truck in Right Lane (#102)
                 objects_3d.append({
                     "id": 102,
                     "class": "truck",
                     "x": 3.5,
                     "y": 0.0,
-                    "z": 44.0,
-                    "relative_velocity": -2.0,
+                    "z": round(manager.truck_z, 1),
+                    "relative_velocity": round(((manager.ego_speed - 60.0) * 1000 / 3600), 1),
                     "is_converging": False
                 })
 
-                # C. Adjacent / Cut-In Sedan in Left Lane (#103 - aligned in center of left lane at x=-3.5m)
-                if has_cutin:
-                    fault_info = manager.active_faults["cut_in_vehicle"]
-                    elapsed = now - fault_info["time"]
-                    dur = max(1.0, fault_info["duration"])
-                    alpha_cut = min(1.0, elapsed / dur)
-                    cut_x = -3.5 + (alpha_cut * 3.5)
-                    cut_z = max(10.5, 24.0 - (alpha_cut * 13.5))
-                    cut_rel_vel = 12.0
-                else:
-                    cut_x = -3.5
-                    cut_z = 24.0
-                    cut_rel_vel = 0.0
-
+                # C. Adjacent / Cut-In Sedan in Left Lane (#103)
                 objects_3d.append({
                     "id": 103,
                     "class": "car",
-                    "x": round(cut_x, 2),
+                    "x": round(manager.sedan_x, 2),
                     "y": 0.0,
-                    "z": round(cut_z, 1),
+                    "z": round(manager.sedan_z, 1),
                     "relative_velocity": round(cut_rel_vel, 1),
                     "is_converging": has_cutin
                 })
@@ -864,7 +892,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                         "gear": "D",
                         "driveMode": "EMERGENCY_STOP" if has_emergency else "MANUAL_OVERRIDE" if has_blindspot else "AUTONOMOUS",
                         "batterySoc": 91,
-                        "distanceToLeadVehicle": lead_z,
+                        "distanceToLeadVehicle": round(manager.lead_car_z, 1),
                         "sensorStatus": sensors_state,
                         "sensorOrchestration": {
                             "matrix": sensors_state,
