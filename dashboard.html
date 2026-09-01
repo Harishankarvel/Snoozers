@@ -481,10 +481,20 @@
         let urgency = 'low';
         const reasoning = {};
         const lead = tracked.find(o => Math.abs(o.position3D.x) < 1.8 && o.position3D.z < 25);
-        if (this.activeFaults.has('manual_override')) {
+        if (this.activeFaults.has('manual_override') || this.activeFaults.has('emergency_stop')) {
           action = 'Emergency Braking: Manual Override'; urgency = 'critical';
           reasoning['Maintain'] = 'REJECTED: Operator takeover override engaged.';
           reasoning['Brake'] = 'ACCEPTED: Maximum deceleration requested.';
+          this.egoSpeed = Math.max(0, this.egoSpeed - 55.0 * 0.05);
+          this.brakePressure = 100;
+          this.throttle = 0;
+        } else if (this.activeFaults.has('sudden_brake') || this.activeFaults.has('sudden_braking')) {
+          action = 'Emergency Braking: Operator Hard Brake Applied'; urgency = 'critical';
+          reasoning['Maintain'] = 'REJECTED: Operator emergency handbrake commanded.';
+          reasoning['Brake'] = 'ACCEPTED: Maximum handbrake deceleration (-8.5 m/s²) engaged. Ego vehicle bringing to stop.';
+          this.egoSpeed = Math.max(0, this.egoSpeed - 55.0 * 0.05);
+          this.brakePressure = 100;
+          this.throttle = 0;
         } else if (this.activeFaults.has('pedestrian_jaywalking')) {
           action = 'Emergency Braking: Yielding to Pedestrian #777'; urgency = 'critical';
           reasoning['Maintain'] = 'REJECTED: Pedestrian crossing ego travel lane.';

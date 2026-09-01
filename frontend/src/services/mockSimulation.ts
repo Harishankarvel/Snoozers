@@ -752,18 +752,22 @@ export class MockSimulationEngine {
     let urgency: 'low' | 'medium' | 'high' | 'critical' = 'low';
     const reasoning: Record<string, string> = {};
 
-    const hasEmergencyFault = this.activeFaults.has('manual_override');
+    const hasEmergencyFault = this.activeFaults.has('manual_override') || this.activeFaults.has('emergency_stop');
+    const hasHardBrake = this.activeFaults.has('sudden_brake') || this.activeFaults.has('sudden_braking') || this.activeFaults.has('hard_brake');
 
     const leadCar = trackedObjects.find((o) => Math.abs(o.position3D?.x || 0) < 1.8 && (o.position3D?.z || 99) < 25);
     const leftLaneOccupied = trackedObjects.some((o) => (o.position3D?.x || 0) < -1.5 && (o.position3D?.z || 99) < 25);
     const rightLaneOccupied = trackedObjects.some((o) => (o.position3D?.x || 0) > 1.5 && (o.position3D?.z || 99) < 25);
 
-    if (hasEmergencyFault) {
+    if (hasEmergencyFault || hasHardBrake) {
       selectedAction = 'Emergency Braking';
       urgency = 'critical';
-      reasoning['Maintain'] = 'REJECTED: Operator takeover override engaged.';
-      reasoning['Brake'] = 'ACCEPTED: Maximum braking pressure commanded.';
-      reasoning['Swerve'] = 'REJECTED: Manual control priority.';
+      reasoning['Maintain'] = 'REJECTED: Operator emergency hard brake commanded.';
+      reasoning['Brake'] = 'ACCEPTED: Maximum handbrake deceleration (-8.5 m/s²) engaged. Ego vehicle bringing to stop.';
+      reasoning['Swerve'] = 'REJECTED: Straight line deceleration in active lane.';
+      this.egoSpeed = Math.max(0, this.egoSpeed - 55.0 * 0.05);
+      this.brakePressure = 100;
+      this.throttle = 0;
     } else if (leadCar && (leadCar.ttc < 2.2 || leadCar.distance < 16)) {
       // Dangerous imminent collision
       urgency = 'critical';

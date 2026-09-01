@@ -506,7 +506,9 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
 
                 has_cutin = 'cut_in_vehicle' in manager.active_faults
                 has_ped = 'pedestrian_jaywalking' in manager.active_faults
-                has_sudden_brake = 'sudden_braking' in manager.active_faults
+                has_sudden_brake = ('sudden_braking' in manager.active_faults or 
+                                    'sudden_brake' in manager.active_faults or 
+                                    'hard_brake' in manager.active_faults)
                 has_blindspot = 'sensor_blindspot' in manager.active_faults
                 has_weather = 'weather_degradation' in manager.active_faults
                 has_pothole = 'pothole_hazard' in manager.active_faults
@@ -687,9 +689,11 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     manager.brake_pressure = 85
                     risk_level = "HIGH"
                 elif has_sudden_brake:
-                    action = "Emergency Braking: Lead Vehicle Hard Stop"
-                    manager.ego_speed = max(10.0, manager.ego_speed - 35.0 * 0.05)
-                    manager.brake_pressure = 90
+                    action = "Emergency Braking: Operator Hard Brake Applied"
+                    reasoning["Brake"] = "ACCEPTED: Maximum handbrake deceleration (-8.5 m/s²) engaged on ego vehicle. Bringing to immediate standstill."
+                    reasoning["Maintain"] = "REJECTED: Manual handbrake command overrides cruise target."
+                    manager.ego_speed = max(0.0, manager.ego_speed - 55.0 * 0.05)
+                    manager.brake_pressure = 100
                     risk_level = "HIGH"
                 elif has_cutin:
                     action = "Brake: Yielding to Cut-In Vehicle #103"
