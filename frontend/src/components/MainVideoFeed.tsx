@@ -36,6 +36,19 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
   const [showRadar, setShowRadar] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
 
+  // Sync refs to prevent stale closure in 60 FPS requestAnimationFrame loop
+  const showBBoxesRef = useRef(true);
+  const showTrajectoriesRef = useRef(true);
+  const showTagsRef = useRef(true);
+  const showRadarRef = useRef(true);
+  const showGridRef = useRef(true);
+
+  useEffect(() => { showBBoxesRef.current = showBBoxes; }, [showBBoxes]);
+  useEffect(() => { showTrajectoriesRef.current = showTrajectories; }, [showTrajectories]);
+  useEffect(() => { showTagsRef.current = showTags; }, [showTags]);
+  useEffect(() => { showRadarRef.current = showRadar; }, [showRadar]);
+  useEffect(() => { showGridRef.current = showGrid; }, [showGrid]);
+
   // Image bitmap caching for zero-leak high-speed video rendering
   const currentBitmapRef = useRef<ImageBitmap | null>(null);
   const isDecodingRef = useRef<boolean>(false);
@@ -140,7 +153,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
     const cx = width * 0.5;
 
     // A. Draw IPM Perspective Ground Grid
-    if (showGrid) {
+    if (showGridRef.current) {
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
       ctx.lineWidth = 1;
 
@@ -168,7 +181,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
     }
 
     // B. Draw Ego Vehicle Predicted Trajectory Corridor
-    if (showTrajectories) {
+    if (showTrajectoriesRef.current) {
       const egoSteering = telemetry.metrics.steeringAngleDeg || 0;
       const isEmergency = telemetry.decision.action.includes('Brake');
       const isSwerve = telemetry.decision.action === 'Swerve';
@@ -219,7 +232,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
       const themeColor = isCritical ? '#FF2A6D' : isCaution ? '#FFB800' : '#00F0FF';
 
       // 1. Draw Object Trajectory Ribbon
-      if (showTrajectories && obj.trajectory && obj.trajectory.length > 1) {
+      if (showTrajectoriesRef.current && obj.trajectory && obj.trajectory.length > 1) {
         ctx.strokeStyle = themeColor;
         ctx.lineWidth = 2;
         ctx.setLineDash([4, 4]);
@@ -240,7 +253,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
       }
 
       // 2. Draw Cyber Bounding Box with Futuristic Corner Brackets
-      if (showBBoxes) {
+      if (showBBoxesRef.current) {
         ctx.strokeStyle = themeColor;
         ctx.lineWidth = isCritical ? 2.5 : 1.5;
 
@@ -306,7 +319,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
       }
 
       // 3. Draw Cyber Identification Tag & Metrics Pill
-      if (showTags) {
+      if (showTagsRef.current) {
         const isPed = obj.class === 'pedestrian';
         const tagText = isPed 
           ? `🚶 JAYWALKER #${obj.id} ${(obj.confidence * 100).toFixed(0)}%`
@@ -344,7 +357,7 @@ export const MainVideoFeed: React.FC<MainVideoFeedProps> = ({
     });
 
     // D. Top-Right Bird's Eye View (BEV) Mini-Radar Map
-    if (showRadar) {
+    if (showRadarRef.current) {
       const radarSize = 140;
       const radarX = width - radarSize - 16;
       const radarY = 16;
