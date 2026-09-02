@@ -1,0 +1,18 @@
+# Render Blueprint Specification for AURA-AV Backend Service
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: aura-av-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: PORT
+        value: 10000

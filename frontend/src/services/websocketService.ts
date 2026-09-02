@@ -228,22 +228,49 @@ class ReconnectingWebSocket {
   }
 }
 
+// Resolve WebSocket Base URL dynamically for local dev, Vercel, and Render
+export function getWebSocketBaseUrl(): string {
+  // 1. Vite Environment Variable (e.g. set in Vercel: VITE_WS_URL=wss://your-backend.onrender.com)
+  const envUrl = (import.meta as any).env?.VITE_WS_URL || (import.meta as any).env?.VITE_BACKEND_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+    let clean = envUrl.trim().replace(/\/+$/, '');
+    if (clean.startsWith('https://')) {
+      clean = clean.replace('https://', 'wss://');
+    } else if (clean.startsWith('http://')) {
+      clean = clean.replace('http://', 'ws://');
+    } else if (!clean.startsWith('ws://') && !clean.startsWith('wss://')) {
+      clean = `wss://${clean}`;
+    }
+    return clean;
+  }
+
+  // 2. Browser Runtime Fallback
+  if (typeof window !== 'undefined') {
+    const isHttps = window.location.protocol === 'https:';
+    const wsProtocol = isHttps ? 'wss:' : 'ws:';
+    const hostname = window.location.hostname;
+
+    // Local development
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+      return `${wsProtocol}//127.0.0.1:8000`;
+    }
+
+    // Default to same-host origin if running in reverse-proxy or container
+    return `${wsProtocol}//${window.location.host}`;
+  }
+
+  return 'ws://127.0.0.1:8000';
+}
+
 // Global Singleton instances for the two required endpoints
 class AVWebSocketService {
   public videoSocket: ReconnectingWebSocket;
   public telemetrySocket: ReconnectingWebSocket;
 
   constructor() {
-    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    const wsProtocol = isHttps ? 'wss:' : 'ws:';
-    let hostname = typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : '127.0.0.1';
-    if (hostname === 'localhost') {
-      hostname = '127.0.0.1';
-    }
-    const host = `${hostname}:8000`;
-
-    this.videoSocket = new ReconnectingWebSocket(`${wsProtocol}//${host}/ws/video`, true);
-    this.telemetrySocket = new ReconnectingWebSocket(`${wsProtocol}//${host}/ws/telemetry`, false);
+    const wsBase = getWebSocketBaseUrl();
+    this.videoSocket = new ReconnectingWebSocket(`${wsBase}/ws/video`, true);
+    this.telemetrySocket = new ReconnectingWebSocket(`${wsBase}/ws/telemetry`, false);
   }
 
   public init() {
