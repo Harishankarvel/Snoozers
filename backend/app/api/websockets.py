@@ -736,7 +736,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     risk_level = "HIGH"
                 elif has_cutin:
                     action = "Brake: Yielding to Cut-In Vehicle #103"
-                    reasoning["Brake"] = f"CRITICAL: Vehicle #103 cut into lane at {cut_z:.1f}m. Safety brake applied."
+                    reasoning["Brake"] = f"CRITICAL: Vehicle #103 cut into lane at {manager.sedan_z:.1f}m. Safety brake applied."
                     target_speed = 20.0
                     target_brake = 75
                     target_throttle = 0
