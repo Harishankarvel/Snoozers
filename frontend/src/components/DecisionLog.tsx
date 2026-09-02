@@ -17,13 +17,7 @@ import {
 import { AVDecision, TelemetryPacket } from '../types/telemetry';
 import { audioManager } from '../utils/audioAlerts';
 
-interface DecisionLogProps {
-  latestTelemetry: TelemetryPacket | null;
-  isFullTab?: boolean;
-  className?: string;
-}
-
-interface LogEntry {
+export interface LogEntry {
   id: string;
   timestamp: string;
   action: string;
@@ -35,12 +29,25 @@ interface LogEntry {
   rawTelemetry?: any;
 }
 
+interface DecisionLogProps {
+  latestTelemetry: TelemetryPacket | null;
+  isFullTab?: boolean;
+  className?: string;
+  logs?: LogEntry[];
+  setLogs?: React.Dispatch<React.SetStateAction<LogEntry[]>>;
+}
+
 export const DecisionLog: React.FC<DecisionLogProps> = ({ 
   latestTelemetry,
   isFullTab = false,
-  className = ''
+  className = '',
+  logs: externalLogs,
+  setLogs: setExternalLogs
 }) => {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [internalLogs, setInternalLogs] = useState<LogEntry[]>([]);
+  const logs = externalLogs || internalLogs;
+  const setLogs = setExternalLogs || setInternalLogs;
+
   const [autoScroll, setAutoScroll] = useState(true);
   const [filterAction, setFilterAction] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,14 +59,14 @@ export const DecisionLog: React.FC<DecisionLogProps> = ({
   const lastLoggedActionRef = useRef<string>('');
   const lastLoggedTimeRef = useRef<number>(0);
 
-  // Parse incoming decisions from telemetry stream
+  // Parse incoming decisions from telemetry stream if no external logger is managing it
   useEffect(() => {
+    if (externalLogs) return; // Managed globally
     if (!latestTelemetry || !latestTelemetry.decision) return;
 
     const decision = latestTelemetry.decision;
     const now = Date.now();
 
-    // Log if action changed or every 1.5s for nominal maintain updates to keep feed alive without flooding
     const shouldLog =
       decision.action !== lastLoggedActionRef.current ||
       decision.urgency === 'critical' ||
@@ -84,10 +91,10 @@ export const DecisionLog: React.FC<DecisionLogProps> = ({
 
       setLogs((prev) => {
         const updated = [...prev, newEntry];
-        return updated.length > 250 ? updated.slice(updated.length - 250) : updated;
+        return updated.length > 500 ? updated.slice(updated.length - 500) : updated;
       });
     }
-  }, [latestTelemetry]);
+  }, [latestTelemetry, externalLogs]);
 
   // Auto-scroll when new log arrives if enabled
   useEffect(() => {

@@ -31,6 +31,7 @@ interface SensorMatrixTabProps {
   latestTelemetry: TelemetryPacket | null;
   onInjectFault?: (payload: FaultInjectionPayload) => void;
   activeFaults?: string[];
+  isActive?: boolean;
 }
 
 const SENSOR_SPECS: Record<string, { label: string; type: string; color: string; freq: string; powerNominal: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }> }> = {
@@ -79,7 +80,8 @@ const SENSOR_SPECS: Record<string, { label: string; type: string; color: string;
 export const SensorMatrixTab: React.FC<SensorMatrixTabProps> = ({
   latestTelemetry,
   onInjectFault,
-  activeFaults = []
+  activeFaults = [],
+  isActive = true
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedEvent, setSelectedEvent] = useState<SensorEventMarker | null>(null);
@@ -104,6 +106,7 @@ export const SensorMatrixTab: React.FC<SensorMatrixTabProps> = ({
 
   // Render 15-Second Historical Confidence Graph on Canvas
   useEffect(() => {
+    if (!isActive) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -111,6 +114,8 @@ export const SensorMatrixTab: React.FC<SensorMatrixTabProps> = ({
 
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
+    if (width <= 0 || height <= 0) return;
+
     const dpr = window.devicePixelRatio || 1;
 
     canvas.width = width * dpr;
@@ -231,7 +236,7 @@ export const SensorMatrixTab: React.FC<SensorMatrixTabProps> = ({
       ctx.shadowBlur = 0;
     });
 
-  }, [history, events, visibleSensors]);
+  }, [history, events, visibleSensors, isActive]);
 
   const getTrendIcon = (trend?: string) => {
     switch (trend) {

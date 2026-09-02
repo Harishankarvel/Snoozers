@@ -16,16 +16,22 @@ import {
   Sparkles
 } from 'lucide-react';
 import { TelemetryPacket } from '../types/telemetry';
-import { DecisionLog } from './DecisionLog';
+import { DecisionLog, LogEntry } from './DecisionLog';
 
 interface ArbiterDecisionTabProps {
   latestTelemetry: TelemetryPacket | null;
   activeFaults: string[];
+  logs?: LogEntry[];
+  setLogs?: React.Dispatch<React.SetStateAction<LogEntry[]>>;
+  isActive?: boolean;
 }
 
 export const ArbiterDecisionTab: React.FC<ArbiterDecisionTabProps> = ({
   latestTelemetry,
-  activeFaults
+  activeFaults,
+  logs,
+  setLogs,
+  isActive = true
 }) => {
   const decision = latestTelemetry?.decision;
   const metrics = latestTelemetry?.metrics;
@@ -185,7 +191,7 @@ export const ArbiterDecisionTab: React.FC<ArbiterDecisionTabProps> = ({
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 line-clamp-2 pl-5">
-                      {reason}
+                      {String(reason)}
                     </p>
                   </div>
                 );
@@ -202,7 +208,12 @@ export const ArbiterDecisionTab: React.FC<ArbiterDecisionTabProps> = ({
 
       {/* Main Section: High-Density Interactive Decision Log Terminal */}
       <div className="w-full flex-1">
-        <DecisionLog latestTelemetry={latestTelemetry} isFullTab={true} />
+        <DecisionLog 
+          latestTelemetry={latestTelemetry} 
+          isFullTab={true} 
+          logs={logs}
+          setLogs={setLogs}
+        />
       </div>
     </div>
   );
