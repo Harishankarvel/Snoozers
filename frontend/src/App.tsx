@@ -22,6 +22,10 @@ export const App: React.FC = () => {
 
   // Mode toggle: Default to false (Live Backend Mode ws://localhost:8000)
   const [isMockMode, setIsMockMode] = useState(false);
+  const isMockModeRef = useRef(isMockMode);
+  useEffect(() => {
+    isMockModeRef.current = isMockMode;
+  }, [isMockMode]);
 
   // Metrics for dual WebSockets
   const [videoMetrics, setVideoMetrics] = useState<WebSocketMetrics>(avWebSocketService.videoSocket.metrics);
@@ -87,9 +91,6 @@ export const App: React.FC = () => {
 
     const unsubVideoStatus = avWebSocketService.videoSocket.onStatusChange((m) => {
       setVideoMetrics({ ...m });
-      if (m.status === 'CONNECTED') {
-        setIsMockMode(false);
-      }
     });
 
     const unsubTelemetryStatus = avWebSocketService.telemetrySocket.onStatusChange((m) => {
@@ -98,14 +99,14 @@ export const App: React.FC = () => {
 
     // Real video frames subscription
     const unsubVideoFrames = avWebSocketService.videoSocket.subscribe((frameData: Blob | ArrayBuffer) => {
-      if (!isMockMode) {
+      if (!isMockModeRef.current) {
         latestFrameBlobRef.current = frameData;
       }
     });
 
     // Real telemetry packets subscription
     const unsubTelemetryPackets = avWebSocketService.telemetrySocket.subscribe((packet: any) => {
-      if (!isMockMode && packet && packet.decision) {
+      if (!isMockModeRef.current && packet && packet.decision) {
         latestTelemetryRef.current = packet;
         setCurrentTelemetry(packet);
         if (packet.activeFaults) {
@@ -117,12 +118,12 @@ export const App: React.FC = () => {
     // 2. Setup Mock Simulation Callbacks
     mockSimulationEngine.setCallbacks(
       (blob) => {
-        if (isMockMode) {
+        if (isMockModeRef.current) {
           latestFrameBlobRef.current = blob;
         }
       },
       (packet) => {
-        if (isMockMode) {
+        if (isMockModeRef.current) {
           latestTelemetryRef.current = packet;
           setCurrentTelemetry(packet);
           if (packet.activeFaults) {
