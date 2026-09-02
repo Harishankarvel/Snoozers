@@ -437,11 +437,13 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
     send_lock = asyncio.Lock()
 
     async def safe_send_text(text: str):
+        if websocket.client_state != WebSocketState.CONNECTED:
+            raise WebSocketDisconnect()
         try:
             async with send_lock:
                 await websocket.send_text(text)
         except Exception:
-            pass
+            raise WebSocketDisconnect()
     
     async def receiver_loop():
         try:
