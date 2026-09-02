@@ -522,11 +522,15 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                 objects_3d = []
                 now = time.time()
 
-                # 1. Update Traffic Vehicle Independent Dynamics
+                # 1. Update Traffic Vehicle Independent Dynamics with realistic natural speed variance
                 dt = 0.05
-                lead_speed_mps = 68.0 * 1000 / 3600
-                truck_speed_mps = 60.0 * 1000 / 3600
-                sedan_speed_mps = 74.0 * 1000 / 3600
+                lead_speed_kmh = 68.0 + math.sin(manager.frame_count * 0.02) * 1.8 + math.cos(manager.frame_count * 0.05) * 0.6
+                truck_speed_kmh = 60.0 + math.sin(manager.frame_count * 0.015) * 1.2
+                sedan_speed_kmh = 74.0 + math.sin(manager.frame_count * 0.025 + 1.2) * 2.0
+
+                lead_speed_mps = lead_speed_kmh * 1000 / 3600
+                truck_speed_mps = truck_speed_kmh * 1000 / 3600
+                sedan_speed_mps = sedan_speed_kmh * 1000 / 3600
                 ego_speed_mps = manager.ego_speed * 1000 / 3600
 
                 # Lead Car propagates forward based on relative speed
@@ -559,7 +563,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                         manager.sedan_z = 80.0
                     elif manager.sedan_z < 18.0:
                         manager.sedan_z = 18.0
-                    cut_rel_vel = round(((manager.ego_speed - 74.0) * 1000 / 3600), 1)
+                    cut_rel_vel = round(((manager.ego_speed - sedan_speed_kmh) * 1000 / 3600), 1)
 
                 # A. Lead Vehicle in Center Lane (#101)
                 lead_x = math.sin(manager.frame_count * 0.04) * 0.35
@@ -569,7 +573,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     "x": round(lead_x, 2),
                     "y": 0.0,
                     "z": round(manager.lead_car_z, 1),
-                    "relative_velocity": round(((manager.ego_speed - 68.0) * 1000 / 3600), 1),
+                    "relative_velocity": round(((manager.ego_speed - lead_speed_kmh) * 1000 / 3600), 1),
                     "is_converging": False
                 })
 
@@ -580,7 +584,7 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     "x": 3.5,
                     "y": 0.0,
                     "z": round(manager.truck_z, 1),
-                    "relative_velocity": round(((manager.ego_speed - 60.0) * 1000 / 3600), 1),
+                    "relative_velocity": round(((manager.ego_speed - truck_speed_kmh) * 1000 / 3600), 1),
                     "is_converging": False
                 })
 
@@ -767,16 +771,22 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     target_throttle = 0
                     manager.ego_speed = max(35.0, manager.ego_speed - 10.0 * dt)
                 else:
-                    # Nominal Cruising at 70 km/h
+                    # Nominal Adaptive Cruising with natural road & airflow micro-variance (68.8 - 71.2 km/h)
                     target_speed = 70.0
                     target_brake = 0
-                    if manager.ego_speed < 68.0:
-                        speed_gap = max(0.0, target_speed - manager.ego_speed)
-                        target_throttle = min(75, int(25 + speed_gap * 2.5))
-                        manager.ego_speed = min(target_speed, manager.ego_speed + 8.0 * dt)
+                    cruise_variance = math.sin(manager.frame_count * 0.03) * 1.1 + math.sin(manager.frame_count * 0.07) * 0.4
+                    desired_speed = target_speed + cruise_variance
+
+                    if manager.ego_speed < desired_speed - 0.2:
+                        speed_gap = max(0.0, desired_speed - manager.ego_speed)
+                        target_throttle = min(60, int(25 + speed_gap * 6.0))
+                        manager.ego_speed = min(desired_speed, manager.ego_speed + 3.0 * dt)
+                    elif manager.ego_speed > desired_speed + 0.2:
+                        target_throttle = 18
+                        manager.ego_speed = max(desired_speed, manager.ego_speed - 2.0 * dt)
                     else:
-                        target_throttle = 25
-                        manager.ego_speed = min(target_speed, manager.ego_speed + 1.0 * dt)
+                        target_throttle = int(24 + math.sin(manager.frame_count * 0.05) * 3)
+                        manager.ego_speed += (desired_speed - manager.ego_speed) * 0.15
 
                 # Smooth Rate-Limiting Filter on Brake Pressure & Throttle
                 if target_brake == 100:

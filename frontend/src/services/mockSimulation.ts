@@ -311,12 +311,16 @@ export class MockSimulationEngine {
       this.egoSpeed = Math.max(this.targetSpeed, this.egoSpeed - 22 * dt);
     } else {
       this.brakePressure = 0;
-      this.targetSpeed = hasWeather ? 55.0 : 72.0;
-      this.throttle = 50;
-      if (this.egoSpeed < this.targetSpeed) {
-        this.egoSpeed = Math.min(this.targetSpeed, this.egoSpeed + 8 * dt);
-      } else if (this.egoSpeed > this.targetSpeed) {
-        this.egoSpeed = Math.max(this.targetSpeed, this.egoSpeed - 6 * dt);
+      this.targetSpeed = hasWeather ? 45.0 : 70.0;
+      const cruiseVariance = Math.sin(this.frameCount * 0.03) * 1.1 + Math.sin(this.frameCount * 0.07) * 0.4;
+      const desiredSpeed = this.targetSpeed + cruiseVariance;
+      this.throttle = Math.round(24 + Math.sin(this.frameCount * 0.05) * 3);
+      if (this.egoSpeed < desiredSpeed - 0.2) {
+        this.egoSpeed = Math.min(desiredSpeed, this.egoSpeed + 3 * dt);
+      } else if (this.egoSpeed > desiredSpeed + 0.2) {
+        this.egoSpeed = Math.max(desiredSpeed, this.egoSpeed - 2 * dt);
+      } else {
+        this.egoSpeed += (desiredSpeed - this.egoSpeed) * 0.15;
       }
     }
 
