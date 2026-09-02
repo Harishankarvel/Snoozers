@@ -32,7 +32,6 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
   const isCautionTtc = ttcAlert?.level === 'CAUTION';
 
   const speedKmh = metrics?.speedKmh ?? 0;
-  const speedMph = metrics?.speedMph ?? 0;
   const targetSpeed = metrics?.targetSpeedKmh ?? 70;
   const steeringAngle = metrics?.steeringAngleDeg ?? 0;
   const brakePressure = metrics?.brakePressurePct ?? 0;
@@ -40,12 +39,6 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
   const accelG = metrics?.accelerationG ?? 0;
   const latG = metrics?.lateralG ?? 0;
   const totalDistKm = ((metrics?.totalDistanceTravelledMeters ?? 0) / 1000).toFixed(2);
-
-  // Speedometer Arc calculation (0 to 140 km/h)
-  const maxSpeed = 140;
-  const speedRatio = Math.min(1, Math.max(0, speedKmh / maxSpeed));
-  const arcStrokeDash = 220;
-  const arcOffset = arcStrokeDash - (arcStrokeDash * speedRatio);
 
   const getSensorStatusBadge = (status?: string) => {
     const s = (status || 'ACTIVE').toUpperCase();
@@ -88,42 +81,22 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
           </span>
         </div>
 
-        {/* Speedometer Radial Gauge */}
-        <div className="relative flex flex-col items-center justify-center py-2">
-          <svg className="w-44 h-28 transform -rotate-90" viewBox="0 0 100 60">
-            {/* Background Arc Track */}
-            <path
-              d="M 15 50 A 35 35 0 0 1 85 50"
-              fill="none"
-              stroke="#131F33"
-              strokeWidth="7"
-              strokeLinecap="round"
-            />
-            {/* Value Arc Glow */}
-            <path
-              d="M 15 50 A 35 35 0 0 1 85 50"
-              fill="none"
-              stroke={isCriticalTtc ? '#FF2A6D' : '#00F0FF'}
-              strokeWidth="7"
-              strokeDasharray={arcStrokeDash}
-              strokeDashoffset={arcOffset}
-              strokeLinecap="round"
-              className="transition-all duration-150 ease-out"
-            />
-          </svg>
-
-          {/* Speed Digital Readout */}
-          <div className="absolute top-8 flex flex-col items-center">
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-bold font-mono text-slate-100 tracking-tight">
-                {speedKmh.toFixed(0)}
-              </span>
-              <span className="text-xs font-mono font-semibold text-cyan-400">KM/H</span>
-            </div>
-            <span className="text-[11px] font-mono text-slate-400">
-              {speedMph.toFixed(0)} MPH <span className="text-slate-600">|</span> SET {targetSpeed}
+        {/* Pure Digital Speedometer Readout */}
+        <div className="flex flex-col items-center justify-center py-4 bg-[#050A14]/70 rounded-lg border border-[#131F33] my-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-6xl font-extrabold font-mono text-slate-100 tracking-tight">
+              {speedKmh.toFixed(0)}
+            </span>
+            <span className="text-sm font-mono font-bold text-cyan-400 tracking-wider">
+              KM/H
             </span>
           </div>
+          <div className="mt-2 flex items-center gap-1.5 text-xs font-mono text-slate-400 bg-[#0A1220] px-3 py-1 rounded-md border border-[#1A2638]">
+            <span className="text-cyan-400 font-bold">SET</span>
+            <span className="text-slate-100 font-bold">{targetSpeed}</span>
+            <span className="text-slate-500 text-[10px]">KM/H</span>
+          </div>
+        </div>
 
           {/* Throttle and Brake Power Bars */}
           <div className="w-full grid grid-cols-2 gap-3 mt-1 pt-2 border-t border-[#131F33]">
@@ -155,7 +128,6 @@ export const TelemetrySidebar: React.FC<TelemetrySidebarProps> = ({
               </div>
             </div>
           </div>
-        </div>
 
         {/* Steering & G-Force Vectors */}
         <div className="grid grid-cols-2 gap-2 bg-[#050A14] p-2.5 rounded-lg border border-[#141E2F] text-xs font-mono">
