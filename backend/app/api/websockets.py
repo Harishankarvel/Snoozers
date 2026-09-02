@@ -531,17 +531,17 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
 
                 # Lead Car propagates forward based on relative speed
                 manager.lead_car_z += (lead_speed_mps - ego_speed_mps) * dt
-                if manager.lead_car_z > 120.0:
-                    manager.lead_car_z = 25.0
-                elif manager.lead_car_z < 6.0:
-                    manager.lead_car_z = 6.0
+                if manager.lead_car_z > 105.0:
+                    manager.lead_car_z = 85.0
+                elif manager.lead_car_z < 18.0:
+                    manager.lead_car_z = 18.0
 
                 # Truck in Right Lane propagates forward
                 manager.truck_z += (truck_speed_mps - ego_speed_mps) * dt
-                if manager.truck_z > 120.0:
-                    manager.truck_z = 28.0
-                elif manager.truck_z < 6.0:
-                    manager.truck_z = 6.0
+                if manager.truck_z > 110.0:
+                    manager.truck_z = 90.0
+                elif manager.truck_z < 18.0:
+                    manager.truck_z = 18.0
 
                 # Sedan in Left Lane / Cut-In
                 if has_cutin:
@@ -555,10 +555,10 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                 else:
                     manager.sedan_x = -3.5
                     manager.sedan_z += (sedan_speed_mps - ego_speed_mps) * dt
-                    if manager.sedan_z > 120.0:
-                        manager.sedan_z = 20.0
-                    elif manager.sedan_z < 6.0:
-                        manager.sedan_z = 6.0
+                    if manager.sedan_z > 110.0:
+                        manager.sedan_z = 80.0
+                    elif manager.sedan_z < 18.0:
+                        manager.sedan_z = 18.0
                     cut_rel_vel = round(((manager.ego_speed - 74.0) * 1000 / 3600), 1)
 
                 # A. Lead Vehicle in Center Lane (#101)
@@ -692,65 +692,107 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                 manager.last_inference_latency = result.get("latency_ms", 0.0)
 
                 # 4. Vehicle Dynamics & Stopping Logic
+                # 4. Smooth Vehicle Dynamics & Longitudinal Control
                 if has_emergency or manager.journey_status == "COMPLETED":
                     action = "Emergency Braking: Operator Takeover" if has_emergency else "Journey Completed (Stop)"
-                    manager.ego_speed = max(0.0, manager.ego_speed - 45.0 * 0.05)
-                    manager.brake_pressure = 100
+                    target_speed = 0.0
+                    target_brake = 100
+                    target_throttle = 0
+                    manager.ego_speed = max(0.0, manager.ego_speed - 45.0 * dt)
+                elif has_sudden_brake:
+                    action = "Emergency Braking: Operator Hard Brake Applied"
+                    reasoning["Brake"] = "ACCEPTED: Maximum handbrake deceleration (-8.5 m/s²) engaged. Bringing ego vehicle to stop."
+                    reasoning["Maintain"] = "REJECTED: Handbrake command overrides cruise target."
+                    target_speed = 0.0
+                    target_brake = 100
+                    target_throttle = 0
+                    manager.ego_speed = max(0.0, manager.ego_speed - 55.0 * dt)
+                    risk_level = "HIGH"
                 elif has_ped:
                     # Car STOPS completely when pedestrian is crossing in front
                     action = "Emergency Braking: Yielding to Pedestrian #777"
                     reasoning["Brake"] = f"CRITICAL: Full stop applied. Yielding to Jaywalking Pedestrian #777 at {ped_z:.1f}m."
-                    manager.ego_speed = max(0.0, manager.ego_speed - 45.0 * 0.05)
-                    manager.brake_pressure = 100
+                    target_speed = 0.0
+                    target_brake = 100
+                    target_throttle = 0
+                    manager.ego_speed = max(0.0, manager.ego_speed - 45.0 * dt)
                     risk_level = "HIGH"
                 elif has_pothole:
                     action = "Swerve: Evasive Maneuver around Pothole"
                     reasoning["Swerve"] = "OPTIMAL: Executing 0.85m lateral swerve to bypass pavement crater."
                     reasoning["Maintain"] = "REJECTED: High risk of tire puncture and suspension damage."
-                    manager.ego_speed = max(35.0, manager.ego_speed - 15.0 * 0.05)
-                    manager.brake_pressure = 40
+                    target_speed = 40.0
+                    target_brake = 35
+                    target_throttle = 0
+                    manager.ego_speed = max(35.0, manager.ego_speed - 15.0 * dt)
                     risk_level = "MEDIUM"
                 elif has_blindspot:
                     action = "Emergency Braking: Sensor Blindspot Occlusion"
                     reasoning["Brake"] = "ACCEPTED: Right sector camera/LIDAR occluded. Engaging safety brake deceleration."
-                    manager.ego_speed = max(0.0, manager.ego_speed - 30.0 * 0.05)
-                    manager.brake_pressure = 85
-                    risk_level = "HIGH"
-                elif has_sudden_brake:
-                    action = "Emergency Braking: Operator Hard Brake Applied"
-                    reasoning["Brake"] = "ACCEPTED: Maximum handbrake deceleration (-8.5 m/s²) engaged on ego vehicle. Bringing to immediate standstill."
-                    reasoning["Maintain"] = "REJECTED: Manual handbrake command overrides cruise target."
-                    manager.ego_speed = max(0.0, manager.ego_speed - 55.0 * 0.05)
-                    manager.brake_pressure = 100
+                    target_speed = 0.0
+                    target_brake = 85
+                    target_throttle = 0
+                    manager.ego_speed = max(0.0, manager.ego_speed - 30.0 * dt)
                     risk_level = "HIGH"
                 elif has_cutin:
                     action = "Brake: Yielding to Cut-In Vehicle #103"
                     reasoning["Brake"] = f"CRITICAL: Vehicle #103 cut into lane at {cut_z:.1f}m. Safety brake applied."
-                    manager.ego_speed = max(20.0, manager.ego_speed - 28.0 * 0.05)
-                    manager.brake_pressure = 80
+                    target_speed = 20.0
+                    target_brake = 75
+                    target_throttle = 0
+                    manager.ego_speed = max(20.0, manager.ego_speed - 28.0 * dt)
                     risk_level = "HIGH"
                 elif has_weather:
                     action = "Slow: Adverse Weather Speed Restriction"
                     reasoning["Maintain"] = "REJECTED: High precipitation & slippery road friction."
                     reasoning["Brake"] = "ACCEPTED: Speed restricted to 45 km/h for hydroplaning prevention."
-                    manager.target_speed = 45.0
+                    target_speed = 45.0
                     if manager.ego_speed > 45.0:
-                        manager.ego_speed = max(45.0, manager.ego_speed - 12.0 * 0.05)
-                        manager.brake_pressure = 35
+                        target_brake = 30
+                        target_throttle = 0
+                        manager.ego_speed = max(45.0, manager.ego_speed - 12.0 * dt)
                     else:
-                        manager.brake_pressure = 0
+                        target_brake = 0
+                        target_throttle = 35
+                        manager.ego_speed = min(45.0, manager.ego_speed + 4.0 * dt)
                     risk_level = "MEDIUM"
                 elif action.startswith("Brake") or risk_level == "HIGH":
-                    manager.ego_speed = max(0.0, manager.ego_speed - 20.0 * 0.05)
-                    manager.brake_pressure = 60
+                    target_speed = 0.0
+                    target_brake = 60
+                    target_throttle = 0
+                    manager.ego_speed = max(0.0, manager.ego_speed - 20.0 * dt)
                 elif action.startswith("Slow") or risk_level == "MEDIUM":
-                    manager.ego_speed = max(30.0, manager.ego_speed - 10.0 * 0.05)
-                    manager.brake_pressure = 30
+                    target_speed = 35.0
+                    target_brake = 25
+                    target_throttle = 0
+                    manager.ego_speed = max(35.0, manager.ego_speed - 10.0 * dt)
                 else:
-                    manager.target_speed = 70.0
-                    manager.brake_pressure = 0
-                    if manager.ego_speed < manager.target_speed:
-                        manager.ego_speed = min(manager.target_speed, manager.ego_speed + 6.0 * 0.05)
+                    # Nominal Cruising at 70 km/h
+                    target_speed = 70.0
+                    target_brake = 0
+                    if manager.ego_speed < 68.0:
+                        speed_gap = max(0.0, target_speed - manager.ego_speed)
+                        target_throttle = min(75, int(25 + speed_gap * 2.5))
+                        manager.ego_speed = min(target_speed, manager.ego_speed + 8.0 * dt)
+                    else:
+                        target_throttle = 25
+                        manager.ego_speed = min(target_speed, manager.ego_speed + 1.0 * dt)
+
+                # Smooth Rate-Limiting Filter on Brake Pressure & Throttle
+                if target_brake == 100:
+                    manager.brake_pressure = 100
+                    manager.throttle = 0
+                elif target_brake > 0:
+                    manager.brake_pressure = int(0.65 * manager.brake_pressure + 0.35 * target_brake)
+                    manager.throttle = 0
+                else:
+                    manager.brake_pressure = max(0, int(manager.brake_pressure * 0.7 - 2))
+                    if manager.brake_pressure == 0:
+                        manager.throttle = int(0.75 * manager.throttle + 0.25 * target_throttle)
+                    else:
+                        manager.throttle = 0
+
+                manager.target_speed = target_speed
 
                 # 5. Hazard Event State Machine (Increments for Pedestrians, Blindspot, Cut-in, Sudden Brake, Weather, Pothole, E-Stop)
                 is_hazard_now = (
