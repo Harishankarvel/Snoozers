@@ -2,16 +2,13 @@ import React, { useState } from 'react';
 import { 
   Sliders, 
   AlertTriangle, 
-  Send, 
   UserX, 
   CloudRain, 
   ShieldAlert, 
   RotateCcw, 
   Zap, 
   EyeOff, 
-  Check, 
-  Radio,
-  FileCode
+  Radio
 } from 'lucide-react';
 import { FaultInjectionPayload } from '../types/telemetry';
 import { audioManager } from '../utils/audioAlerts';
@@ -27,26 +24,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
   activeFaults,
   className = ''
 }) => {
-  const [showCustomJson, setShowCustomJson] = useState(false);
-  const [customJson, setCustomJson] = useState<string>(
-    JSON.stringify(
-      {
-        action: 'inject_fault',
-        fault_type: 'cut_in_vehicle',
-        severity: 'critical',
-        duration_sec: 8,
-        params: {
-          lateral_velocity: -2.5,
-          target_distance: 12.0
-        }
-      },
-      null,
-      2
-    )
-  );
-  const [jsonError, setJsonError] = useState<string | null>(null);
-  const [lastSentTime, setLastSentTime] = useState<string | null>(null);
-
   const handleQuickAction = (faultType: string, customPayload?: Partial<FaultInjectionPayload>) => {
     audioManager.playInjection();
     const payload: FaultInjectionPayload = {
@@ -57,19 +34,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       ...customPayload,
     };
     onInjectFault(payload);
-    setLastSentTime(new Date().toLocaleTimeString());
-  };
-
-  const handleCustomSend = () => {
-    try {
-      setJsonError(null);
-      const parsed = JSON.parse(customJson);
-      audioManager.playInjection();
-      onInjectFault(parsed);
-      setLastSentTime(new Date().toLocaleTimeString());
-    } catch (err: any) {
-      setJsonError(err.message || 'Invalid JSON syntax');
-    }
   };
 
   const isFaultActive = (type: string) => activeFaults.includes(type);
@@ -84,26 +48,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
             EDGE-CASE & FAULT INJECTION CONTROLS
           </h2>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              audioManager.playClick();
-              setShowCustomJson(!showCustomJson);
-            }}
-            className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border transition-all ${
-              showCustomJson 
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' 
-                : 'bg-[#050A14] text-slate-400 border-[#1A2638] hover:text-slate-200 hover:border-slate-600'
-            }`}
-          >
-            <FileCode className="w-3 h-3 text-cyan-400" />
-            <span>{showCustomJson ? 'HIDE RAW JSON' : 'RAW JSON DISPATCH'}</span>
-          </button>
-
-          <div className="hidden sm:flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
-            <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-            <span className="text-[10px]">20 Hz WS</span>
-          </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+          <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+          <span className="text-[10px]">20 Hz WS</span>
         </div>
       </div>
 
@@ -205,7 +152,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           onClick={() => {
             audioManager.playClick();
             onInjectFault({ action: 'reset_simulation' });
-            setLastSentTime(new Date().toLocaleTimeString());
           }}
           className="flex flex-col items-center justify-center p-2 rounded-lg border border-[#1A2638] bg-[#0A101D] text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300 hover:bg-[#0E1626] text-center transition-all active:scale-95"
         >
@@ -214,53 +160,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           <span className="text-[9px] font-mono text-slate-500">Clear All</span>
         </button>
       </div>
-
-      {/* Optional Collapsible Custom JSON Payload Dispatcher */}
-      {showCustomJson && (
-        <div className="bg-[#050A14] rounded-lg border border-[#162234] p-2.5 flex flex-col gap-2 mt-1 animate-fadeIn">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400">
-              <FileCode className="w-3.5 h-3.5 text-cyan-400" />
-              <span>CUSTOM JSON PAYLOAD DISPATCHER (OVER /ws/telemetry)</span>
-            </div>
-            {lastSentTime && (
-              <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                <Check className="w-3 h-3" />
-                LAST DISPATCHED AT {lastSentTime}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2">
-            <textarea
-              value={customJson}
-              onChange={(e) => {
-                setCustomJson(e.target.value);
-                setJsonError(null);
-              }}
-              rows={3}
-              className="flex-1 bg-[#03060B] border border-[#1A2638] rounded p-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500 select-text resize-none"
-              placeholder="Enter JSON payload..."
-            />
-
-            <button
-              id="btn-send-custom-json"
-              onClick={handleCustomSend}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded font-mono text-xs font-bold shadow-[0_0_15px_rgba(0,240,255,0.25)] border border-cyan-400/40 transition-all active:scale-95"
-            >
-              <Send className="w-4 h-4" />
-              <span>TRANSMIT JSON</span>
-            </button>
-          </div>
-
-          {jsonError && (
-            <div className="text-xs font-mono text-rose-400 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" />
-              <span>Syntax Error: {jsonError}</span>
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 };
