@@ -215,11 +215,39 @@
         }
         for (let i = this.objects.length - 1; i >= 0; i--) {
           const obj = this.objects[i];
-          const relMps = ((this.egoSpeed - obj.speedKmh) * 1000) / 3600;
-          obj.distanceZ -= relMps * dt;
-          if (obj.distanceZ < 4.0 || obj.distanceZ > 120.0) {
-            if (obj.id >= 700) this.objects.splice(i, 1);
-            else { obj.distanceZ = 80 + Math.random() * 25; }
+          if (obj.id === 101) {
+            // Lead Car in front
+            if (this.activeFaults.has('sudden_brake') || this.activeFaults.has('sudden_braking')) {
+              obj.distanceZ = Math.max(11.5, obj.distanceZ - 18.0 * dt);
+              obj.speedKmh = 15.0;
+            } else {
+              const targetZ = 34.0 + Math.sin(this.frameCount * 0.03) * 5.0;
+              obj.distanceZ += (targetZ - obj.distanceZ) * 0.1;
+              obj.speedKmh = this.egoSpeed;
+            }
+          } else if (obj.id === 102) {
+            // Semi-Truck in right lane ahead
+            const targetZ = 44.0 + Math.sin(this.frameCount * 0.02) * 5.0;
+            obj.distanceZ += (targetZ - obj.distanceZ) * 0.08;
+            obj.speedKmh = this.egoSpeed;
+          } else if (obj.id === 103) {
+            // Left Lane / Cut-In Sedan
+            if (this.activeFaults.has('cut_in_vehicle')) {
+              obj.lateralOffset = Math.max(0.0, obj.lateralOffset + 0.6 * dt);
+              obj.distanceZ = 16.5;
+            } else {
+              const targetZ = 28.0 + Math.sin(this.frameCount * 0.035) * 4.0;
+              obj.distanceZ += (targetZ - obj.distanceZ) * 0.1;
+              obj.speedKmh = this.egoSpeed;
+            }
+          } else if (obj.id === 777) {
+            // Pedestrian crossing across road in front
+            obj.lateralOffset += 0.8 * dt;
+            obj.distanceZ = 16.0;
+            if (obj.lateralOffset > 1.8) {
+              this.objects.splice(i, 1);
+              continue;
+            }
           }
         }
         const lead = this.objects.find(o => o.lane === 0 && o.distanceZ > 0);

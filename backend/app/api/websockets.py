@@ -524,50 +524,22 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                 objects_3d = []
                 now = time.time()
 
-                # 1. Update Traffic Vehicle Independent Dynamics with realistic natural speed variance
+                # 1. Update Traffic Vehicle Dynamics to cruise and move smoothly in front of the vehicle
                 dt = 0.05
-                lead_speed_kmh = 68.0 + math.sin(manager.frame_count * 0.02) * 1.8 + math.cos(manager.frame_count * 0.05) * 0.6
-                truck_speed_kmh = 60.0 + math.sin(manager.frame_count * 0.015) * 1.2
-                sedan_speed_kmh = 74.0 + math.sin(manager.frame_count * 0.025 + 1.2) * 2.0
+                lead_speed_kmh = manager.ego_speed + math.sin(manager.frame_count * 0.03) * 1.5
+                truck_speed_kmh = manager.ego_speed + math.sin(manager.frame_count * 0.02) * 1.2
+                sedan_speed_kmh = manager.ego_speed + math.sin(manager.frame_count * 0.025) * 1.8
 
-                lead_speed_mps = lead_speed_kmh * 1000 / 3600
-                truck_speed_mps = truck_speed_kmh * 1000 / 3600
-                sedan_speed_mps = sedan_speed_kmh * 1000 / 3600
-                ego_speed_mps = manager.ego_speed * 1000 / 3600
-
-                # Lead Car propagates forward based on relative speed
-                manager.lead_car_z += (lead_speed_mps - ego_speed_mps) * dt
-                if manager.lead_car_z > 105.0:
-                    manager.lead_car_z = 85.0
-                elif manager.lead_car_z < 18.0:
-                    manager.lead_car_z = 18.0
-
-                # Truck in Right Lane propagates forward
-                manager.truck_z += (truck_speed_mps - ego_speed_mps) * dt
-                if manager.truck_z > 110.0:
-                    manager.truck_z = 90.0
-                elif manager.truck_z < 18.0:
-                    manager.truck_z = 18.0
-
-                # Sedan in Left Lane / Cut-In
-                if has_cutin:
-                    fault_info = manager.active_faults["cut_in_vehicle"]
-                    elapsed = now - fault_info["time"]
-                    dur = max(1.0, fault_info["duration"])
-                    alpha_cut = min(1.0, elapsed / dur)
-                    manager.sedan_x = -3.5 + (alpha_cut * 3.5)
-                    manager.sedan_z = max(10.5, 24.0 - (alpha_cut * 13.5))
-                    cut_rel_vel = 12.0
+                # A. Lead Vehicle in Center Lane (#101) - Cruises stably ahead in front (26m - 42m)
+                if has_sudden_brake:
+                    # Emergency hard braking: closes in sharply ahead in front of ego car
+                    manager.lead_car_z = max(11.5, manager.lead_car_z - 18.0 * dt)
+                    lead_rel_vel = round(((manager.ego_speed - 15.0) * 1000 / 3600), 1)
                 else:
-                    manager.sedan_x = -3.5
-                    manager.sedan_z += (sedan_speed_mps - ego_speed_mps) * dt
-                    if manager.sedan_z > 110.0:
-                        manager.sedan_z = 80.0
-                    elif manager.sedan_z < 18.0:
-                        manager.sedan_z = 18.0
-                    cut_rel_vel = round(((manager.ego_speed - sedan_speed_kmh) * 1000 / 3600), 1)
+                    target_lead_z = 34.0 + math.sin(manager.frame_count * 0.03) * 6.0
+                    manager.lead_car_z += (target_lead_z - manager.lead_car_z) * 0.1
+                    lead_rel_vel = round(((manager.ego_speed - lead_speed_kmh) * 1000 / 3600), 1)
 
-                # A. Lead Vehicle in Center Lane (#101)
                 lead_x = math.sin(manager.frame_count * 0.04) * 0.35
                 objects_3d.append({
                     "id": 101,
@@ -575,22 +547,41 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
                     "x": round(lead_x, 2),
                     "y": 0.0,
                     "z": round(manager.lead_car_z, 1),
-                    "relative_velocity": round(((manager.ego_speed - lead_speed_kmh) * 1000 / 3600), 1),
-                    "is_converging": False
+                    "relative_velocity": lead_rel_vel,
+                    "is_converging": has_sudden_brake
                 })
 
-                # B. Commercial Semi-Truck in Right Lane (#102)
+                # B. Commercial Semi-Truck in Right Lane (#102) - Cruises ahead in right lane (38m - 52m)
+                target_truck_z = 44.0 + math.sin(manager.frame_count * 0.02) * 6.0
+                manager.truck_z += (target_truck_z - manager.truck_z) * 0.08
+                truck_rel_vel = round(((manager.ego_speed - truck_speed_kmh) * 1000 / 3600), 1)
+
                 objects_3d.append({
                     "id": 102,
                     "class": "truck",
                     "x": 3.5,
                     "y": 0.0,
                     "z": round(manager.truck_z, 1),
-                    "relative_velocity": round(((manager.ego_speed - truck_speed_kmh) * 1000 / 3600), 1),
+                    "relative_velocity": truck_rel_vel,
                     "is_converging": False
                 })
 
                 # C. Adjacent / Cut-In Sedan in Left Lane (#103)
+                if has_cutin:
+                    fault_info = manager.active_faults["cut_in_vehicle"]
+                    elapsed = now - fault_info["time"]
+                    dur = max(1.0, fault_info["duration"])
+                    alpha_cut = min(1.0, elapsed / dur)
+                    # Swerves from left lane (x=-3.5) into center lane (x=0.0) ahead in front at z=16m
+                    manager.sedan_x = -3.5 + (alpha_cut * 3.5)
+                    manager.sedan_z = 16.5 + math.sin(alpha_cut * math.pi) * 2.0
+                    cut_rel_vel = 8.5
+                else:
+                    manager.sedan_x = -3.5
+                    target_sedan_z = 28.0 + math.sin(manager.frame_count * 0.035) * 5.0
+                    manager.sedan_z += (target_sedan_z - manager.sedan_z) * 0.1
+                    cut_rel_vel = round(((manager.ego_speed - sedan_speed_kmh) * 1000 / 3600), 1)
+
                 objects_3d.append({
                     "id": 103,
                     "class": "car",

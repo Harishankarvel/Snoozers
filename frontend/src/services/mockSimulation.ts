@@ -268,28 +268,40 @@ export class MockSimulationEngine {
     for (let i = this.objects.length - 1; i >= 0; i--) {
       const obj = this.objects[i];
 
-      // Relative speed in m/s
-      const relSpeedMps = ((this.egoSpeed - obj.speedKmh) * 1000) / 3600;
-      obj.distanceZ -= relSpeedMps * dt;
-
-      // Special behaviors
-      if (obj.customBehavior === 'cut_in') {
-        if (obj.lateralOffset > 0.0) {
-          obj.lateralOffset -= 0.6 * dt;
+      // Special behaviors & steady forward cruising in front of ego vehicle
+      if (obj.id === 101) {
+        // Lead Car (#101) - maintains realistic forward headway in center lane
+        if (this.activeFaults.has('sudden_brake') || this.activeFaults.has('sudden_braking')) {
+          obj.distanceZ = Math.max(11.5, obj.distanceZ - 18.0 * dt);
+          obj.speedKmh = 15.0;
+        } else {
+          const targetZ = 34.0 + Math.sin(this.frameCount * 0.03) * 5.0;
+          obj.distanceZ += (targetZ - obj.distanceZ) * 0.1;
+          obj.speedKmh = this.egoSpeed;
+        }
+      } else if (obj.id === 102) {
+        // Right Lane Semi-Truck (#102) - cruises in right lane ahead in front
+        const targetZ = 44.0 + Math.sin(this.frameCount * 0.02) * 5.0;
+        obj.distanceZ += (targetZ - obj.distanceZ) * 0.08;
+        obj.speedKmh = this.egoSpeed;
+      } else if (obj.id === 103) {
+        // Left Lane / Cut-In Sedan (#103)
+        if (obj.customBehavior === 'cut_in') {
+          if (obj.lateralOffset > 0.0) {
+            obj.lateralOffset -= 0.6 * dt;
+          }
+          obj.distanceZ = 16.5;
+        } else {
+          const targetZ = 28.0 + Math.sin(this.frameCount * 0.035) * 4.0;
+          obj.distanceZ += (targetZ - obj.distanceZ) * 0.1;
+          obj.speedKmh = this.egoSpeed;
         }
       } else if (obj.customBehavior === 'jaywalk') {
-        obj.lateralOffset += 0.8 * dt; // crosses road
-      }
-
-      // Reset far away objects
-      if (obj.distanceZ < 4.0 || obj.distanceZ > 120.0) {
-        if (obj.id >= 700) {
-          // Remove injected temporary objects
+        obj.lateralOffset += 0.8 * dt; // crosses road ahead in front
+        obj.distanceZ = 18.0;
+        if (obj.lateralOffset > 1.8) {
           this.objects.splice(i, 1);
           continue;
-        } else {
-          obj.distanceZ = 80 + Math.random() * 30;
-          obj.speedKmh = 55 + Math.random() * 25;
         }
       }
     }
