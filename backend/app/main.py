@@ -17,6 +17,8 @@ app = FastAPI(
     version="2.4.0"
 )
 
+from fastapi.staticfiles import StaticFiles
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -29,19 +31,25 @@ app.add_middleware(
 # Include WebSocket routes (/ws/video, /ws/telemetry)
 app.include_router(websocket_router)
 
+# Mount compiled React frontend assets if available
+frontend_dist = os.path.abspath(os.path.join(backend_dir, "..", "frontend", "dist"))
+assets_dir = os.path.join(frontend_dist, "assets")
+if os.path.exists(assets_dir):
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
 @app.get("/")
 async def root():
     """
-    Serves the dashboard HTML client directly when accessed in a browser.
+    Serves the production React dashboard client directly.
     """
-    dashboard_paths = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard.html")),
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "index.html")),
-    ]
-    for path in dashboard_paths:
-        if os.path.exists(path):
-            return FileResponse(path, media_type="text/html")
-            
+    index_path = os.path.join(frontend_dist, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path, media_type="text/html")
+        
+    dashboard_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dashboard.html"))
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path, media_type="text/html")
+        
     return HTMLResponse("<h2>AURA-AV Decision Support Backend is Active.</h2><p>WebSockets: <code>/ws/video</code> &amp; <code>/ws/telemetry</code></p>")
 
 @app.get("/api/health")
